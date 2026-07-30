@@ -74,4 +74,70 @@ pub trait LanguageAdapter: Send + Sync {
 
     /// Is the body effectively empty — only `pass`, `...`, or a docstring?
     fn is_empty_body(&self, body: Node<'_>, src: &str) -> bool;
+
+    /// Might this test's assertions be performed by a decorator rather than by
+    /// its own body?
+    ///
+    /// Real examples that forced this in: SQLAlchemy's
+    /// `@profiling.function_call_count()` asserts on call counts, and pydantic's
+    /// `@pytest.mark.benchmark` hands the work to the `benchmark` fixture. In
+    /// both, "the body has no assertion" is true but meaningless.
+    ///
+    /// Implementations should use an allowlist of decorators known to be inert
+    /// (`parametrize`, `patch`, `skipif`, …) and assume anything unfamiliar may
+    /// assert. Over-suppressing costs a missed finding; under-suppressing costs
+    /// our credibility.
+    fn assertions_may_come_from_decorator(&self, test: &TestFn<'_>, src: &str) -> bool;
+
+    /// Does this test hand a value back to its caller?
+    ///
+    /// Normal tests return nothing. One that returns something is feeding a
+    /// harness — typically a decorator that drives it and does the asserting
+    /// elsewhere. SQLAlchemy's `@CacheKeySuite.run_suite_tests` works exactly
+    /// this way, so a returned value means we must not claim the test is empty.
+    fn body_returns_value(&self, body: Node<'_>) -> bool;
+
+    // --- Vocabulary for the individual rules ---------------------------------
+    //
+    // Each of these isolates one language-specific judgement that a rule needs.
+    // They all have direct analogues in other languages (`expect(true)`,
+    // `jest.mock`, `try/catch`, `throw`), which is what keeps the rules
+    // themselves language-agnostic.
+
+    /// If this assertion's outcome is fixed at parse time, whether it always
+    /// passes.
+    ///
+    /// - `Some(true)`  — vacuous: holds no matter what the code does.
+    /// - `Some(false)` — always fails. That is a deliberate marker such as
+    ///   `assert False, "should not get here"`, and emphatically *not* our
+    ///   problem: a test that always fails announces itself.
+    /// - `None`        — the outcome depends on the code under test.
+    ///
+    /// The distinction matters. An earlier version of this checked only whether
+    /// the expression was constant, and flagged rich's
+    /// `assert False, f"Object with no __class__ shouldn't raise {e}"` — the
+    /// exact opposite of a vacuous test.
+    fn constant_assertion_outcome(&self, node: Node<'_>, src: &str) -> Option<bool>;
+
+    /// Is this an assertion about a mock's recorded calls, rather than about a
+    /// value the code produced?
+    fn is_mock_assertion(&self, node: Node<'_>, src: &str) -> bool;
+
+    /// Symbols this test replaces with a mock, gathered from both decorators
+    /// and the body.
+    fn patched_symbols(&self, test: &TestFn<'_>, src: &str) -> Vec<String>;
+
+    /// The subject a test's name implies: `test_charge_card` -> `charge_card`.
+    fn implied_subject(&self, test_name: &str) -> Option<String>;
+
+    /// Would this exception handler swallow a failed assertion?
+    ///
+    /// `except ValueError: pass` does not — an `AssertionError` escapes it. Only
+    /// handlers that catch assertion failures *and* neither re-raise nor assert
+    /// count as swallowing.
+    fn is_swallowing_handler(&self, node: Node<'_>, src: &str) -> bool;
+
+    /// Does this statement unconditionally end the function, making later
+    /// statements in the same block unreachable?
+    fn is_terminating_statement(&self, node: Node<'_>) -> bool;
 }

@@ -11,7 +11,11 @@ use std::path::Path;
 use crate::lang::{LanguageAdapter, TestFn};
 use crate::report::Finding;
 
+mod constant_assertion;
 mod no_assertions;
+mod patched_target;
+mod swallowed_failure;
+mod unreachable_assertion;
 
 /// Analysis that is computed once per file and shared by every test in it.
 ///
@@ -43,5 +47,11 @@ pub trait Rule: Send + Sync {
 /// The registry. Order here is the order rules run; it does not affect output
 /// ordering, which is sorted by location in [`crate::report::Report::sort`].
 pub fn all_rules() -> Vec<Box<dyn Rule>> {
-    vec![Box::new(no_assertions::NoAssertions)]
+    vec![
+        Box::new(no_assertions::NoAssertions),
+        Box::new(constant_assertion::ConstantAssertion),
+        Box::new(patched_target::PatchedTargetUnderTest),
+        Box::new(swallowed_failure::SwallowedFailure),
+        Box::new(unreachable_assertion::UnreachableAssertion),
+    ]
 }

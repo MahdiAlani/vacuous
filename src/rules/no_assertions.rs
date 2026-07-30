@@ -47,6 +47,21 @@ impl Rule for NoAssertions {
             return Vec::new();
         }
 
+        // False-positive guard 3: the test returns a value, so a decorator is
+        // driving it and asserting on our behalf.
+        if ctx.adapter.body_returns_value(ctx.test.body) {
+            return Vec::new();
+        }
+
+        // False-positive guard 4: a decorator may be doing the asserting —
+        // profiling call-count limits, benchmark regression checks, and so on.
+        if ctx
+            .adapter
+            .assertions_may_come_from_decorator(ctx.test, ctx.src)
+        {
+            return Vec::new();
+        }
+
         let message = if ctx.adapter.is_empty_body(ctx.test.body, ctx.src) {
             format!("`{}` has an empty body — it can never fail.", ctx.test.name)
         } else {

@@ -12,7 +12,7 @@ When the same agent writes both the implementation and the tests, *"the tests pa
 
 ## Status: early
 
-Python only, and one rule shipped so far. Not yet published to PyPI or crates.io. See the [roadmap](#roadmap).
+Python only, five rules shipped. Not yet published to PyPI or crates.io. See the [roadmap](#roadmap).
 
 It already finds real bugs in mature codebases, though. From Flask's own test suite:
 
@@ -98,10 +98,48 @@ The architecture is deliberately boring and readable. The `LanguageAdapter` trai
 | Rule | Catches | Confidence |
 |---|---|---|
 | `no-assertions` | A test body containing nothing that can fail | `certain` |
+| `constant-assertion` | Every assertion is on literals — `assert True`, `assertEqual(3, 3)` | `certain` |
+| `swallowed-failure` | The assertion is caught and discarded by a handler | `certain` |
+| `unreachable-assertion` | The assertion sits after a `return` or `raise` | `certain` |
+| `patched-target-under-test` | The test mocks its own subject, then asserts only on that mock | `likely` |
+
+Three of these carry deliberate precision work that a naive version gets wrong:
+
+- `constant-assertion` evaluates **truthiness**, not just constancy. `assert False, "should not get here"` is constant but always *fails* — a deliberate marker, and the opposite of vacuous.
+- `swallowed-failure` checks **which exceptions are caught**. `except ValueError: pass` does not swallow an `AssertionError`.
+- `unreachable-assertion` looks at **direct siblings only**. A `return` nested inside an `if` does not kill the statements after it.
+
+## Validated against real code
+
+Every rule is developed by running it over real repositories and hand-checking each finding. That process has caught seven distinct classes of false positive so far, all now pinned by regression fixtures — cross-file assertion helpers (`eq_`), decorator-supplied assertions (`@profiling.function_call_count`), benchmark fixtures, tests that return values to a harness, nested route handlers named `test`, same-file asserting helpers, and always-failing markers.
+
+Current results across 29,395 tests in 12 well-maintained projects:
+
+| Project | Vacuous | Tests | Rate | Time |
+|---|---:|---:|---:|---:|
+| sqlalchemy | 215 | 12,716 | 1.7% | 2.6 s |
+| pydantic | 83 | 4,280 | 1.9% | 1.3 s |
+| celery | 144 | 3,309 | 4.4% | 0.7 s |
+| ansible | 61 | 2,300 | 2.7% | 1.6 s |
+| scrapy | 53 | 2,005 | 2.6% | 0.7 s |
+| django-rest-framework | 15 | 1,303 | 1.2% | 0.4 s |
+| rich | 10 | 721 | 1.4% | 0.1 s |
+| httpx | 2 | 539 | 0.4% | 0.1 s |
+| click | 4 | 527 | 0.8% | 0.3 s |
+| flask | 1 | 390 | 0.3% | 0.1 s |
+| requests | 10 | 347 | 2.9% | 0.1 s |
+| black | 1 | 258 | 0.4% | 0.2 s |
+| **Total** | **599** | **29,395** | **2.0%** | |
+
+Roughly **one test in fifty cannot fail**, in projects maintained to a high standard. Verified examples:
+
+- **flask** — `test_werkzeug_passthrough_errors`, parametrized into 24 cases, records `rv["passthrough_errors"]` through a mock and never asserts on it.
+- **celery** — `test_eager_chain_inside_task` calls `chain_add.apply_async(args=(4, 8), throw=True).get()` and never checks that the result is 12.
+- **requests** — three tests in `test_packages.py` whose entire body is a bare attribute access, e.g. `requests.packages.urllib3`.
 
 ## Roadmap
 
-**Static rules** — `constant-assertion` (`assert True`), `patched-target-under-test` (the test patches the function it tests), `mock-only-assertion`, `assert-on-mock-return` (asserts a value the test itself configured), `swallowed-failure` (`try: assert ... except: pass`), `unreachable-assertion`, `duplicate-test`, `broad-raises`, `skipped-test`.
+**Static rules** — `mock-only-assertion`, `assert-on-mock-return` (asserts a value the test itself configured), `duplicate-test`, `broad-raises`, `skipped-test`, `smoke-only`.
 
 **`vacuous verify`** — the deep pass. Stub a function's body, run the suite, and see if anything fails. If nothing does, no test guards that function. Scoped to a diff (`--since HEAD~1`) so it takes seconds rather than the hours that made classic mutation testing unadoptable. Reports a **guard rate**: the share of changed functions that any test actually protects.
 

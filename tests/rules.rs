@@ -28,6 +28,111 @@ fn scan(rel: &str) -> Report {
     outcome.report
 }
 
+/// Test names flagged by one specific rule, in report order.
+fn flagged_by(rule_dir: &str, rule: &str) -> Vec<String> {
+    scan(&format!("tests/fixtures/python/{rule_dir}/should_flag.py"))
+        .findings
+        .iter()
+        .filter(|f| f.rule == rule)
+        .map(|f| f.test_name.clone())
+        .collect()
+}
+
+/// A negative fixture must produce no findings from *any* rule, not just the
+/// one it was written for. That catches cross-rule contamination too.
+fn assert_no_findings(rule_dir: &str) {
+    let rel = format!("tests/fixtures/python/{rule_dir}/should_not_flag.py");
+    let report = scan(&rel);
+    assert!(
+        report.findings.is_empty(),
+        "false positives in {rel}: {:#?}",
+        report.findings
+    );
+}
+
+#[test]
+fn constant_assertion_flags_tautologies() {
+    assert_eq!(
+        flagged_by("constant_assertion", "constant-assertion"),
+        vec![
+            "test_asserts_true",
+            "test_asserts_identity",
+            "test_asserts_string_equality",
+            "test_all_assertions_constant",
+            "test_assert_equal_constants",
+            "test_assert_true_literal",
+        ]
+    );
+}
+
+#[test]
+fn constant_assertion_leaves_real_checks_alone() {
+    assert_no_findings("constant_assertion");
+}
+
+#[test]
+fn patched_target_flags_tests_that_mock_their_own_subject() {
+    assert_eq!(
+        flagged_by("patched_target", "patched-target-under-test"),
+        vec!["test_charge_card", "test_send_email", "test_sync_users"]
+    );
+}
+
+#[test]
+fn patched_target_hedges_because_naming_is_a_convention() {
+    let report = scan("tests/fixtures/python/patched_target/should_flag.py");
+    assert!(
+        report
+            .findings
+            .iter()
+            .filter(|f| f.rule == "patched-target-under-test")
+            .all(|f| f.confidence == Confidence::Likely),
+        "inferring a subject from a test's name is not a structural fact, \
+         so this rule must never claim `certain`: {:#?}",
+        report.findings
+    );
+}
+
+#[test]
+fn patched_target_leaves_dependency_mocks_alone() {
+    assert_no_findings("patched_target");
+}
+
+#[test]
+fn swallowed_failure_flags_discarded_assertions() {
+    assert_eq!(
+        flagged_by("swallowed_failure", "swallowed-failure"),
+        vec![
+            "test_bare_except",
+            "test_catches_exception",
+            "test_catches_assertion_error",
+            "test_catches_exception_and_only_logs",
+        ]
+    );
+}
+
+#[test]
+fn swallowed_failure_respects_which_exceptions_are_caught() {
+    assert_no_findings("swallowed_failure");
+}
+
+#[test]
+fn unreachable_assertion_flags_assertions_after_an_exit() {
+    assert_eq!(
+        flagged_by("unreachable_assertion", "unreachable-assertion"),
+        vec![
+            "test_return_before_assert",
+            "test_raise_before_assert",
+            "test_return_in_loop_body_then_assert",
+        ]
+    );
+}
+
+#[test]
+fn unreachable_assertion_understands_nested_returns() {
+    assert_no_findings("unreachable_assertion");
+}
+
 #[test]
 fn no_assertions_flags_tests_that_cannot_fail() {
     let report = scan("tests/fixtures/python/no_assertions/should_flag.py");
@@ -69,7 +174,7 @@ fn no_assertions_stays_quiet_on_real_tests() {
     );
     // Pins test discovery. Helpers, nested functions, and `not_a_test_at_all`
     // are all excluded, leaving exactly the real tests.
-    assert_eq!(report.tests_scanned, 14);
+    assert_eq!(report.tests_scanned, 19);
 }
 
 /// Regression test for a false positive found by scanning flask: view functions

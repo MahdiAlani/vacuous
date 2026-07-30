@@ -54,3 +54,17 @@ pub fn text<'a>(node: Node<'_>, src: &'a str) -> &'a str {
 pub fn line_of(node: Node<'_>) -> usize {
     node.start_position().row + 1
 }
+
+/// A node's source, collapsed onto one line and truncated, for quoting back to
+/// the user in a finding's message.
+pub fn snippet(node: Node<'_>, src: &str, max_chars: usize) -> String {
+    let collapsed = text(node, src)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if collapsed.chars().count() <= max_chars {
+        return collapsed;
+    }
+    let truncated: String = collapsed.chars().take(max_chars).collect();
+    format!("{truncated}…")
+}

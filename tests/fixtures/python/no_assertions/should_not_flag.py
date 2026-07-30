@@ -107,6 +107,46 @@ def test_with_nested_click_command(runner):
     assert runner.invoke(testcmd).exit_code == 0
 
 
+# --- Regression cases found by scanning sqlalchemy, pydantic and celery ------
+
+
+def test_uses_nose_style_assertion():
+    # SQLAlchemy's suite is built on `eq_`/`is_`/`ne_` rather than bare `assert`.
+    # Not knowing these made us report 36% of its 12,716 tests as vacuous.
+    eq_(compute(), 3)
+
+
+@profiling.function_call_count()
+def test_decorator_does_the_asserting():
+    # SQLAlchemy asserts on call counts from the decorator, not in the body.
+    t1.insert().compile()
+
+
+@pytest.mark.benchmark(group="complete")
+def test_benchmark_has_no_assertions(benchmark):
+    # pydantic: the `benchmark` fixture measures and checks for regressions.
+    # Note that ordinary `pytest.mark.*` labels stay inert — only markers with
+    # real behaviour suppress.
+    benchmark(validate, payload())
+
+
+def test_returns_a_value_for_its_decorator():
+    # SQLAlchemy's CacheKeySuite calls the returned lambdas and compares them.
+    def stmt0():
+        return select(qt_table)
+
+    return [stmt0]
+
+
+def test_decorated_nested_function():
+    # The assertion lives on the inner function's decorator.
+    @profiling.function_call_count()
+    def go():
+        t1.update().compile()
+
+    go()
+
+
 def not_a_test_at_all():
     """Must not be collected as a test in the first place."""
     pass
