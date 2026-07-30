@@ -1,18 +1,17 @@
-"""Mocking a dependency — or mocking to create a precondition — is normal."""
+"""Mocking a dependency, or mocking to set up a condition, is routine."""
 
 from unittest.mock import patch
 
 
 @patch("myapp.billing.stripe_client")
 def test_charge_card(mock_stripe):
-    # Mocks a dependency, not the subject. The real `charge_card` still runs.
+    # Mocks a dependency. The real charge_card still runs.
     result = charge_card(order)
     assert result.status == "ok"
 
 
 def test_db(mocker):
-    # `db` is below the minimum symbol length: names this short collide by
-    # coincidence too often to accuse anyone over.
+    # Too short a name to match on; two-letter symbols collide by accident.
     mocked = mocker.patch("myapp.db")
     connect()
     mocked.assert_called_once()
@@ -23,15 +22,9 @@ def test_unrelated_name(mocker):
     assert reconcile_ledger() == 0
 
 
-# --- Regression cases found by scanning rich, requests and flask -------------
-# Every one of these was a false positive from the first version of this rule,
-# which matched on the name alone. They are why the rule now also requires that
-# the test asserts on nothing but mocks.
-
-
 def test_input(monkeypatch, capsys):
-    # rich patches `builtins.input` inside `test_input` — same name, entirely
-    # different thing — and asserts on real captured output.
+    # rich patches builtins.input here. Same name, different thing, and the
+    # assertions are on real captured output.
     monkeypatch.setattr("builtins.input", fake_input)
     console = Console()
     user_input = console.input(prompt="foo:")
@@ -40,15 +33,13 @@ def test_input(monkeypatch, capsys):
 
 
 def test_idna(mocker):
-    # requests patches `requests.help.idna` to *create* the condition under
-    # test, then asserts on a real value.
+    # requests patches this to create the condition it's testing.
     mocker.patch("requests.help.idna", new=None)
     assert info()["idna"] == {"version": ""}
 
 
 def test_init_db(monkeypatch):
-    # flask's tutorial patches `init_db` to check that the CLI wiring calls it,
-    # and asserts on real command output.
+    # Checks that the CLI wiring calls init_db, and asserts on real output.
     monkeypatch.setattr("flaskr.db.init_db", fake_init_db)
     result = runner.invoke(args=["init-db"])
     assert "Initialized" in result.output

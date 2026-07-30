@@ -11,11 +11,11 @@ use vacuous::report::{self, Confidence};
 #[command(
     name = "vacuous",
     version,
-    about = "Find the tests that cannot fail",
-    long_about = "vacuous finds tests that pass no matter what the code does — \
-                  tests with no assertions, tautological assertions, or assertions \
-                  that only verify their own mocks.\n\n\
-                  Everything runs locally. No network, no API key, no LLM."
+    about = "Find Python tests that pass no matter what your code does",
+    long_about = "Finds tests with no assertions, assertions on literals, \
+                  assertions that get discarded, and tests that only check their \
+                  own mocks.\n\n\
+                  Static analysis only: it never runs your tests."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -30,17 +30,13 @@ enum Command {
         #[arg(default_value = ".")]
         path: PathBuf,
 
-        /// Lowest confidence to report: `certain`, `likely`, or `possible`.
-        ///
-        /// Defaults to `likely` so that speculative heuristics never cause a
-        /// false accusation on a first run.
+        /// Lowest confidence to report: certain, likely, or possible.
         #[arg(long, default_value = "likely", value_name = "LEVEL")]
         min_confidence: String,
     },
 }
 
-/// Exit codes: 0 = clean, 1 = findings, 2 = the tool itself failed.
-/// CI can therefore distinguish "your tests are bad" from "vacuous is broken".
+/// 0 clean, 1 findings, 2 the tool itself broke. CI needs to tell those apart.
 fn main() -> ExitCode {
     match run() {
         Ok(true) => ExitCode::from(1),

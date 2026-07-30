@@ -1,9 +1,7 @@
-"""No test in this file may be flagged.
+"""None of these may be flagged.
 
-This fixture is the false-positive contract for `no-assertions`. Every
-assertion dialect we claim to understand gets a case here, including the two
-suppression routes: delegation to a verification helper, and mock assertions
-(which genuinely can fail, so this rule must leave them alone).
+Covers each assertion dialect we claim to understand, plus every way the
+assertion can live somewhere other than the test body.
 """
 
 import numpy as np
@@ -59,17 +57,8 @@ class TestUnittestStyle:
             lookup("missing")
 
 
-# --- Regression cases found by running against real repositories -------------
-# Both of these classes of false positive were caught by scanning flask's test
-# suite. They must never come back.
-
-
 def common_object_test(app):
-    """A local helper that does the asserting.
-
-    Its name contains no `check`/`verify`/`assert` hint, so only real call-graph
-    resolution can see that it asserts. Taken from flask/tests/test_config.py.
-    """
+    """Asserts, but nothing in the name says so. Straight out of flask."""
     assert app.secret_key == "config"
 
 
@@ -79,7 +68,6 @@ def test_delegates_to_local_helper():
 
 
 def indirectly_asserts(app):
-    """Asserts only via another local helper — requires transitive resolution."""
     common_object_test(app)
 
 
@@ -89,8 +77,7 @@ def test_delegates_transitively():
 
 
 def test_with_nested_route_handler(client):
-    # Flask test suites define view functions named `test`. They are nested, so
-    # no runner ever collects them — and neither may we.
+    # flask names view functions `test`. Nested, so no runner collects them.
     @app.route("/test")
     def test():
         return "ok"
@@ -99,7 +86,6 @@ def test_with_nested_route_handler(client):
 
 
 def test_with_nested_click_command(runner):
-    # Same shape with click commands, from flask/tests/test_cli.py.
     @click.command()
     def testcmd():
         click.echo("hi")
@@ -107,31 +93,25 @@ def test_with_nested_click_command(runner):
     assert runner.invoke(testcmd).exit_code == 0
 
 
-# --- Regression cases found by scanning sqlalchemy, pydantic and celery ------
-
-
 def test_uses_nose_style_assertion():
-    # SQLAlchemy's suite is built on `eq_`/`is_`/`ne_` rather than bare `assert`.
-    # Not knowing these made us report 36% of its 12,716 tests as vacuous.
+    # Some suites use nothing but these.
     eq_(compute(), 3)
 
 
 @profiling.function_call_count()
 def test_decorator_does_the_asserting():
-    # SQLAlchemy asserts on call counts from the decorator, not in the body.
+    # The decorator checks the call count.
     t1.insert().compile()
 
 
 @pytest.mark.benchmark(group="complete")
 def test_benchmark_has_no_assertions(benchmark):
-    # pydantic: the `benchmark` fixture measures and checks for regressions.
-    # Note that ordinary `pytest.mark.*` labels stay inert — only markers with
-    # real behaviour suppress.
+    # The fixture measures and checks. Plain pytest.mark labels don't count.
     benchmark(validate, payload())
 
 
 def test_returns_a_value_for_its_decorator():
-    # SQLAlchemy's CacheKeySuite calls the returned lambdas and compares them.
+    # Something else calls these and compares the results.
     def stmt0():
         return select(qt_table)
 
@@ -139,7 +119,6 @@ def test_returns_a_value_for_its_decorator():
 
 
 def test_decorated_nested_function():
-    # The assertion lives on the inner function's decorator.
     @profiling.function_call_count()
     def go():
         t1.update().compile()
@@ -148,5 +127,5 @@ def test_decorated_nested_function():
 
 
 def not_a_test_at_all():
-    """Must not be collected as a test in the first place."""
+    """Shouldn't be collected in the first place."""
     pass

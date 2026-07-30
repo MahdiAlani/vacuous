@@ -1,8 +1,5 @@
-//! The language abstraction.
-//!
-//! This trait is the seam that keeps adding a language additive rather than a
-//! rewrite. A rule is written once against `LanguageAdapter`; supporting
-//! TypeScript later means implementing this trait, not touching the rules.
+//! Everything language-specific sits behind `LanguageAdapter`, so the checks in
+//! `crate::rules` don't need to know what they're looking at.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -10,134 +7,72 @@ use tree_sitter::Node;
 
 pub mod python;
 
-/// A test function we found in a test file.
 #[derive(Debug, Clone)]
 pub struct TestFn<'t> {
-    /// e.g. `test_user_can_log_in`
     pub name: String,
-    /// The whole function definition node.
+    /// The whole function definition.
     pub node: Node<'t>,
-    /// The function's body block — what rules actually inspect.
+    /// The body block, which is what checks look at.
     pub body: Node<'t>,
     /// 1-based line of the `def`.
     pub line: usize,
 }
 
 pub trait LanguageAdapter: Send + Sync {
-    /// Short id, e.g. `python`.
     fn name(&self) -> &'static str;
 
-    /// The tree-sitter grammar for this language.
     fn language(&self) -> tree_sitter::Language;
 
-    /// Would a test runner collect this file? Mirrors the runner's own
-    /// discovery rules so we don't scan helper modules and report noise.
+    /// Would a test runner collect this file?
     fn is_test_file(&self, path: &Path) -> bool;
 
-    /// Every test function in the file.
     fn test_functions<'t>(&self, root: Node<'t>, src: &str) -> Vec<TestFn<'t>>;
 
-    /// Is this node something that can make the test fail?
-    ///
-    /// Deliberately broad: a mock assertion like `mock.assert_called_once()`
-    /// counts, because it genuinely *can* fail. Judging whether such an
-    /// assertion is *meaningful* is a separate rule's job, not this one's.
+    /// Anything that can make the test fail. Mock assertions count here;
+    /// whether they're meaningful is a different question.
     fn is_assertion(&self, node: Node<'_>, src: &str) -> bool;
 
-    /// Does this node look like a call to a helper that asserts on our behalf?
-    ///
-    /// A pure name heuristic, used only as a fallback for helpers we cannot
-    /// resolve — for example one imported from another module. Prefer
-    /// [`LanguageAdapter::asserting_helpers`], which resolves for real.
+    /// Name-based guess for helpers we can't resolve, e.g. imported from
+    /// another module. Only used to suppress findings.
     fn is_verification_helper(&self, node: Node<'_>, src: &str) -> bool;
 
-    /// If `node` is a call, the final segment of the called function's name.
+    /// Final segment of a call's callee, if this is a call at all.
     fn called_name<'a>(&self, node: Node<'_>, src: &'a str) -> Option<&'a str>;
 
-    /// Names of functions defined in this file whose bodies contain assertions,
-    /// resolved transitively.
-    ///
-    /// This is what lets us stay quiet on the extremely common pattern of a
-    /// shared checker in the same test module:
-    ///
-    /// ```python
-    /// def common_object_test(app):      # asserts
-    ///     assert app.secret_key == "config"
-    ///
-    /// def test_config_from_pyfile():    # no assertions of its own, but fine
-    ///     common_object_test(app)
-    /// ```
-    ///
-    /// Name heuristics cannot catch `common_object_test`, so we build a
-    /// per-file call graph instead.
+    /// Functions in this file that assert, followed through calls. Catches the
+    /// common shape of a shared checker living in the same test module.
     fn asserting_helpers(&self, root: Node<'_>, src: &str) -> HashSet<String>;
 
-    /// Is the body effectively empty — only `pass`, `...`, or a docstring?
-    fn is_empty_body(&self, body: Node<'_>, src: &str) -> bool;
-
-    /// Might this test's assertions be performed by a decorator rather than by
-    /// its own body?
+    /// Whether an assertion with a fixed outcome always passes.
     ///
-    /// Real examples that forced this in: SQLAlchemy's
-    /// `@profiling.function_call_count()` asserts on call counts, and pydantic's
-    /// `@pytest.mark.benchmark` hands the work to the `benchmark` fixture. In
-    /// both, "the body has no assertion" is true but meaningless.
-    ///
-    /// Implementations should use an allowlist of decorators known to be inert
-    /// (`parametrize`, `patch`, `skipif`, …) and assume anything unfamiliar may
-    /// assert. Over-suppressing costs a missed finding; under-suppressing costs
-    /// our credibility.
-    fn assertions_may_come_from_decorator(&self, test: &TestFn<'_>, src: &str) -> bool;
-
-    /// Does this test hand a value back to its caller?
-    ///
-    /// Normal tests return nothing. One that returns something is feeding a
-    /// harness — typically a decorator that drives it and does the asserting
-    /// elsewhere. SQLAlchemy's `@CacheKeySuite.run_suite_tests` works exactly
-    /// this way, so a returned value means we must not claim the test is empty.
-    fn body_returns_value(&self, body: Node<'_>) -> bool;
-
-    // --- Vocabulary for the individual rules ---------------------------------
-    //
-    // Each of these isolates one language-specific judgement that a rule needs.
-    // They all have direct analogues in other languages (`expect(true)`,
-    // `jest.mock`, `try/catch`, `throw`), which is what keeps the rules
-    // themselves language-agnostic.
-
-    /// If this assertion's outcome is fixed at parse time, whether it always
-    /// passes.
-    ///
-    /// - `Some(true)`  — vacuous: holds no matter what the code does.
-    /// - `Some(false)` — always fails. That is a deliberate marker such as
-    ///   `assert False, "should not get here"`, and emphatically *not* our
-    ///   problem: a test that always fails announces itself.
-    /// - `None`        — the outcome depends on the code under test.
-    ///
-    /// The distinction matters. An earlier version of this checked only whether
-    /// the expression was constant, and flagged rich's
-    /// `assert False, f"Object with no __class__ shouldn't raise {e}"` — the
-    /// exact opposite of a vacuous test.
+    /// `Some(false)` is an always-failing marker such as `assert False`, which
+    /// isn't our problem — it fails loudly by itself. `None` means the outcome
+    /// depends on the code under test.
     fn constant_assertion_outcome(&self, node: Node<'_>, src: &str) -> Option<bool>;
 
-    /// Is this an assertion about a mock's recorded calls, rather than about a
-    /// value the code produced?
+    /// An assertion about a mock's recorded calls rather than a real value.
     fn is_mock_assertion(&self, node: Node<'_>, src: &str) -> bool;
 
-    /// Symbols this test replaces with a mock, gathered from both decorators
-    /// and the body.
+    /// Symbols this test swaps out for a mock, from decorators and body.
     fn patched_symbols(&self, test: &TestFn<'_>, src: &str) -> Vec<String>;
 
-    /// The subject a test's name implies: `test_charge_card` -> `charge_card`.
+    /// `test_charge_card` -> `charge_card`.
     fn implied_subject(&self, test_name: &str) -> Option<String>;
 
-    /// Would this exception handler swallow a failed assertion?
-    ///
-    /// `except ValueError: pass` does not — an `AssertionError` escapes it. Only
-    /// handlers that catch assertion failures *and* neither re-raise nor assert
-    /// count as swallowing.
+    /// Whether this handler would swallow a failed assertion. `except
+    /// ValueError` wouldn't, since an assertion failure escapes it.
     fn is_swallowing_handler(&self, node: Node<'_>, src: &str) -> bool;
 
-    /// Does this statement unconditionally end the function, making later
-    /// statements in the same block unreachable?
+    /// Ends the function, so later statements in the same block are dead.
     fn is_terminating_statement(&self, node: Node<'_>) -> bool;
+
+    /// Might a decorator be doing the asserting? Unfamiliar decorators should
+    /// count as suspect — guessing wrong here produces false positives.
+    fn assertions_may_come_from_decorator(&self, test: &TestFn<'_>, src: &str) -> bool;
+
+    /// Only `pass`, `...`, or a docstring.
+    fn is_empty_body(&self, body: Node<'_>, src: &str) -> bool;
+
+    /// Hands a value back, which means something else is driving the test.
+    fn body_returns_value(&self, body: Node<'_>) -> bool;
 }

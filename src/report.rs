@@ -1,22 +1,15 @@
-//! Findings, confidence levels, and how we render them.
-//!
-//! The most important type here is [`Confidence`]. A linter that makes even one
-//! false accusation gets uninstalled and never reinstalled, so every rule must
-//! declare how sure it is, and we only show `Certain` and `Likely` by default.
+//! Findings and how they're rendered.
 
 use std::path::PathBuf;
 
-/// How sure we are that a finding is a genuine problem.
-///
-/// Ordered deliberately so `>=` comparisons work for filtering:
-/// `Possible < Likely < Certain`.
+/// Variants are ordered so `>=` works for filtering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Confidence {
-    /// A heuristic worth a look, but plausible reasons exist to write it this way.
+    /// Worth a look, but there are plausible reasons to write it this way.
     Possible,
-    /// Almost certainly a problem; a small number of legitimate exceptions exist.
+    /// Almost certainly a problem, with a few legitimate exceptions.
     Likely,
-    /// A structural fact about the code, not a judgement call. Cannot be a false positive.
+    /// A structural fact about the code rather than a judgement.
     Certain,
 }
 
@@ -51,21 +44,18 @@ impl Confidence {
     }
 }
 
-/// One vacuous test, located and explained.
 #[derive(Debug, Clone)]
 pub struct Finding {
-    /// Stable rule id, e.g. `no-assertions`. Used for config and suppression.
+    /// Stable id, e.g. `no-assertions`, for config and suppression.
     pub rule: &'static str,
     pub confidence: Confidence,
     pub file: PathBuf,
-    /// 1-based line of the offending test's `def`.
+    /// 1-based, pointing at whatever the check considers the offender.
     pub line: usize,
     pub test_name: String,
-    /// Why this is a problem, in plain language, specific to this occurrence.
     pub message: String,
 }
 
-/// The result of a whole scan.
 #[derive(Debug, Default)]
 pub struct Report {
     pub findings: Vec<Finding>,
@@ -74,15 +64,14 @@ pub struct Report {
 }
 
 impl Report {
-    /// Merge another report in. Used to fold per-file results after parallel scanning.
+    /// Folds in a per-file result after parallel scanning.
     pub fn absorb(&mut self, other: Report) {
         self.findings.extend(other.findings);
         self.tests_scanned += other.tests_scanned;
         self.files_scanned += other.files_scanned;
     }
 
-    /// Sort findings into a stable, human-friendly order so output is
-    /// deterministic regardless of the order files finished parsing.
+    /// Files finish parsing in arbitrary order, so sort before printing.
     pub fn sort(&mut self) {
         self.findings.sort_by(|a, b| {
             a.file
@@ -97,10 +86,7 @@ impl Report {
     }
 }
 
-/// Render a report for a terminal.
-///
-/// Uses `anstream` so colour is stripped automatically when piped and
-/// translated correctly on legacy Windows consoles.
+/// `anstream` strips colour when piped and handles older Windows consoles.
 pub fn print_pretty(report: &Report, root: &std::path::Path) {
     use anstream::println;
 
@@ -134,7 +120,7 @@ pub fn print_pretty(report: &Report, root: &std::path::Path) {
     );
     println!();
 
-    // Align the location column so the rule names line up and scan easily.
+    // Pad the location column so rule names line up.
     let locations: Vec<String> = report
         .findings
         .iter()
@@ -167,11 +153,8 @@ pub fn print_pretty(report: &Report, root: &std::path::Path) {
     println!();
 }
 
-/// How to show a finding's path.
-///
-/// When scanning a directory we show the path relative to it. When scanning a
-/// single file, `strip_prefix` would leave an empty string, so fall back to the
-/// file name.
+/// Relative to the scan root, except when the root *is* the file, where
+/// `strip_prefix` leaves nothing.
 fn display_path<'a>(
     file: &'a std::path::Path,
     root: &std::path::Path,
@@ -189,8 +172,7 @@ fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
     if n == 1 { one } else { many }
 }
 
-/// `1240` -> `1,240`. Test counts get large enough that this matters for
-/// readability, and the headline number is the whole point of the summary.
+/// `1240` -> `1,240`. Test counts get big enough to need it.
 fn thousands(n: usize) -> String {
     let digits = n.to_string();
     let mut out = String::with_capacity(digits.len() + digits.len() / 3);

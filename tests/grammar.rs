@@ -1,10 +1,6 @@
-//! Grammar smoke test.
-//!
-//! tree-sitter grammar crates version independently of the core crate (we pair
-//! core 0.26 with the Python grammar 0.25), and they interoperate through
-//! `tree-sitter-language`. That contract holds today but is not guaranteed
-//! forever, so this test fails loudly in CI the moment an ABI mismatch appears,
-//! rather than letting it surface as mysteriously empty scan results.
+//! The Python grammar versions independently of tree-sitter core (0.25 against
+//! 0.26 here) and the two meet through `tree-sitter-language`. When that breaks,
+//! scans come back mysteriously empty, so fail here instead.
 
 use vacuous::lang::LanguageAdapter;
 use vacuous::lang::python::Python;

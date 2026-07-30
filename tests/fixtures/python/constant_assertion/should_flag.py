@@ -1,4 +1,4 @@
-"""Every test here asserts only on constants."""
+"""Every assertion here is on literals."""
 
 
 def test_asserts_true():

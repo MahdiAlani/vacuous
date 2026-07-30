@@ -1,7 +1,4 @@
-"""Every test in this file must be flagged by `no-assertions`.
-
-These are the shapes agents produce most often: call the thing, stop.
-"""
+"""All of these should be flagged. Call the thing, then stop."""
 
 
 def test_creates_user():

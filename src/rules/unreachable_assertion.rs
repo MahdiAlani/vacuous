@@ -1,4 +1,4 @@
-//! Rule: `unreachable-assertion` — the assertion sits after an early exit.
+//! An assertion stranded after an early exit:
 //!
 //! ```python
 //! def test_user_is_saved():
@@ -7,13 +7,8 @@
 //!     assert user.id is not None
 //! ```
 //!
-//! A stray `return` (or `raise`) leaves everything after it dead. Agents produce
-//! this when editing a test in several passes, and it is invisible in a test
-//! report because the test still passes.
-//!
-//! Only statements *directly* after the exit in the *same* block count. A
-//! `return` nested inside an `if` does not make its siblings unreachable, and
-//! this rule must not claim otherwise.
+//! Only direct siblings of the exit count. A `return` nested inside an `if`
+//! doesn't kill what follows it.
 
 use super::{Rule, RuleCtx};
 use crate::parse::{descendants, line_of};

@@ -1,12 +1,7 @@
-//! Rule: `no-assertions` — a test that contains nothing capable of failing.
+//! A test body with nothing in it that can fail. It passes for exactly one
+//! reason: the code didn't raise. Coverage counts it either way.
 //!
-//! This is the highest-volume pattern in agent-written test suites: the agent
-//! calls the function, and stops. The test then passes for exactly one reason —
-//! the code did not raise — while appearing in coverage as a tested path.
-//!
-//! Confidence is `Certain` because "this body contains no assertion" is a
-//! structural fact, not a judgement. The two false-positive routes are handled
-//! explicitly below.
+//! Most of what follows is the four ways this conclusion can be wrong.
 
 use super::{Rule, RuleCtx};
 use crate::parse::descendants;

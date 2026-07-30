@@ -6,21 +6,21 @@ use ignore::WalkBuilder;
 
 use crate::lang::LanguageAdapter;
 
-/// Collect every test file under `root`.
+/// Every test file under `root`.
 ///
-/// Uses the `ignore` crate so `.gitignore` is respected for free — without
-/// this we would happily scan `.venv/` and `node_modules/` and report on
-/// third-party test suites.
+/// The `ignore` crate gives us `.gitignore` handling, which keeps us out of
+/// `.venv/` and other people's test suites.
 ///
-/// If `root` is a single file, it is returned as-is without the test-name
-/// check, so `vacuous check some_file.py` always does what the user meant.
+/// A `root` that's already a file comes back as-is, skipping the name check, so
+/// `vacuous check some_file.py` does the obvious thing.
 pub fn find_test_files(root: &Path, adapter: &dyn LanguageAdapter) -> Vec<PathBuf> {
     if root.is_file() {
         return vec![root.to_path_buf()];
     }
 
     let mut files: Vec<PathBuf> = WalkBuilder::new(root)
-        .hidden(false) // don't skip dotted dirs wholesale; .gitignore still applies
+        // Don't skip dotted dirs wholesale; .gitignore still applies.
+        .hidden(false)
         .build()
         .filter_map(Result::ok)
         .filter(|entry| entry.file_type().is_some_and(|t| t.is_file()))

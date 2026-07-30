@@ -1,4 +1,4 @@
-//! Rule: `swallowed-failure` — the assertion is caught and discarded.
+//! An assertion whose failure gets caught and thrown away:
 //!
 //! ```python
 //! def test_parses_config():
@@ -8,13 +8,8 @@
 //!         pass
 //! ```
 //!
-//! The assertion runs, fails, raises `AssertionError`, and the handler throws it
-//! away. The test passes. Agents write this constantly while trying to make a
-//! flaky test green.
-//!
-//! Precision detail: `except ValueError: pass` does *not* swallow an assertion
-//! failure, so [`crate::lang::LanguageAdapter::is_swallowing_handler`] checks
-//! which exceptions are actually caught.
+//! `except ValueError: pass` is fine, since an `AssertionError` escapes it.
+//! [`crate::lang::LanguageAdapter::is_swallowing_handler`] draws that line.
 
 use super::{Rule, RuleCtx};
 use crate::parse::{descendants, line_of};

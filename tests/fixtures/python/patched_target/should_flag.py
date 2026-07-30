@@ -1,7 +1,7 @@
-"""Tests that mock their own subject and then only ever check the mock.
+"""Mocks its own subject, then checks nothing but the mock.
 
-Both conditions have to hold. Mocking your subject while still asserting on a
-real value is legitimate and lives in `should_not_flag.py`.
+Both halves are required. Mocking the subject while still asserting on something
+real lives in should_not_flag.py.
 """
 
 from unittest.mock import Mock, patch

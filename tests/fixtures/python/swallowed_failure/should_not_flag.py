@@ -1,12 +1,10 @@
-"""Handlers that do not swallow assertion failures."""
+"""Handlers that leave the assertion able to fail."""
 
 import pytest
 
 
 def test_narrow_except_does_not_catch_assertions():
-    # An AssertionError escapes `except ValueError`, so the assertion still
-    # bites. This is the precision case that separates us from a naive
-    # "assert inside try" check.
+    # An AssertionError escapes `except ValueError`, so this still bites.
     try:
         assert parse("x") == 1
     except ValueError:
@@ -35,7 +33,7 @@ def test_finally_is_not_a_handler():
 
 
 def test_assertion_after_the_try():
-    # The handler swallows, but the assertion sits outside the try entirely.
+    # The handler does swallow, but the assertion is outside the try.
     try:
         value = compute()
     except Exception:

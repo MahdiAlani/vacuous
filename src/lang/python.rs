@@ -1,4 +1,4 @@
-//! Python adapter: pytest and unittest vocabulary.
+//! pytest and unittest vocabulary.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -9,14 +9,14 @@ use crate::parse::{descendants, line_of, text};
 
 pub struct Python;
 
-/// Substrings that suggest a call delegates verification to a helper.
-/// Used only to *suppress* findings, so a generous list is the safe choice.
+/// Substrings hinting that a call checks something. Only used to suppress, so
+/// being generous is the safe direction.
 const VERIFICATION_HINTS: &[&str] = &[
     "assert", "check", "verify", "validate", "expect", "ensure", "compare", "match", "confirm",
 ];
 
 /// `unittest.mock` assertions. These check recorded calls, so literal arguments
-/// do not make them tautological the way `assertEqual(1, 1)` is.
+/// don't make them tautological the way `assertEqual(1, 1)` is.
 const MOCK_ASSERTION_PREFIXES: &[&str] = &[
     "assert_called",
     "assert_not_called",
@@ -26,12 +26,8 @@ const MOCK_ASSERTION_PREFIXES: &[&str] = &[
     "assert_not_awaited",
 ];
 
-/// Assertion functions from widely used test-support conventions that carry no
-/// `assert` prefix.
-///
-/// The nose/SQLAlchemy family. SQLAlchemy's suite is built almost entirely on
-/// these — without them we reported 36% of its 12,716 tests as vacuous, which
-/// was nonsense.
+/// The nose/SQLAlchemy assertion helpers. No `assert` prefix, but that's what
+/// they are, and some suites use nothing else.
 const KNOWN_ASSERTION_FUNCTIONS: &[&str] = &[
     "eq_",
     "ne_",
@@ -50,7 +46,6 @@ const KNOWN_ASSERTION_FUNCTIONS: &[&str] = &[
     "expect",
 ];
 
-/// Exception types that catch a failed assertion.
 const ASSERTION_CATCHING: &[&str] = &["Exception", "BaseException", "AssertionError"];
 
 impl LanguageAdapter for Python {
@@ -69,12 +64,10 @@ impl LanguageAdapter for Python {
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             return false;
         };
-        // `conftest.py` holds fixtures, not tests, and pytest never collects
-        // tests from it. Excluding it avoids a whole class of false positives.
         if stem == "conftest" {
             return false;
         }
-        // Mirrors pytest/unittest discovery: `test_*.py`, `tests.py`, `*_test.py`.
+        // pytest/unittest discovery: test_*.py, tests.py, *_test.py.
         stem.starts_with("test") || stem.ends_with("_test")
     }
 
@@ -91,11 +84,6 @@ impl LanguageAdapter for Python {
             if !name.starts_with("test") {
                 continue;
             }
-            // A test runner only collects module-level functions and methods of
-            // classes. Functions nested inside another function are never
-            // collected — and test suites are full of them, because route
-            // handlers and CLI commands get named things like `test` and
-            // `testcmd`. Flagging those would be a pure false positive.
             if !is_collectible(node) {
                 continue;
             }
@@ -114,21 +102,16 @@ impl LanguageAdapter for Python {
 
     fn is_assertion(&self, node: Node<'_>, src: &str) -> bool {
         match node.kind() {
-            // Bare `assert x == y`
             "assert_statement" => true,
             "call" => {
                 let Some(name) = callee_name(node, src) else {
                     return false;
                 };
-                // Covers unittest (`assertEqual`, `assertRaises`), numpy/pandas
-                // (`assert_allclose`, `assert_frame_equal`), hamcrest
-                // (`assert_that`), and mock (`assert_called_once_with`).
+                // Catches unittest, numpy/pandas `assert_allclose`, hamcrest
+                // `assert_that`, and mock's `assert_called_*`.
                 name.starts_with("assert")
-                    // `pytest.raises(...)` / `self.assertRaises(...)`
                     || name == "raises"
-                    // `pytest.fail(...)` / `self.fail(...)`
                     || name == "fail"
-                    // `eq_(a, b)` and friends.
                     || KNOWN_ASSERTION_FUNCTIONS.contains(&name)
             }
             _ => false,
@@ -151,8 +134,7 @@ impl LanguageAdapter for Python {
     }
 
     fn asserting_helpers(&self, root: Node<'_>, src: &str) -> HashSet<String> {
-        // Step 1: for every function in the file, record whether it asserts
-        // directly and which local names it calls.
+        // name -> (asserts directly, names it calls)
         let mut defs: HashMap<String, (bool, Vec<String>)> = HashMap::new();
 
         for node in descendants(root) {
@@ -177,19 +159,18 @@ impl LanguageAdapter for Python {
                 }
             }
 
-            // Nested definitions share the outer name in this map; last one
-            // wins, which is harmless because we only ever use this to
-            // *suppress* findings.
+            // Nested defs collide with the outer name; last one wins. Harmless,
+            // since this only ever suppresses.
             defs.insert(name.to_string(), (asserts_directly, calls));
         }
 
-        // Step 2: propagate to a fixed point so `a -> b -> assert` counts.
         let mut asserting: HashSet<String> = defs
             .iter()
             .filter(|(_, (direct, _))| *direct)
             .map(|(name, _)| name.clone())
             .collect();
 
+        // Propagate to a fixed point so a -> b -> assert counts.
         loop {
             let mut changed = false;
             for (name, (_, calls)) in &defs {
@@ -210,9 +191,9 @@ impl LanguageAdapter for Python {
     }
 
     fn constant_assertion_outcome(&self, node: Node<'_>, src: &str) -> Option<bool> {
-        // Bare `assert <condition>[, <message>]`. Only the condition counts —
-        // the message is nearly always a literal and would poison the analysis.
         if node.kind() == "assert_statement" {
+            // First named child is the condition. The optional message is
+            // usually a literal and would skew this.
             let condition = node.named_child(0)?;
             return eval_const(condition, src).map(|value| value.truthy());
         }
@@ -221,8 +202,6 @@ impl LanguageAdapter for Python {
             return None;
         }
         let name = callee_name(node, src)?;
-        // Mock-history assertions check recorded behaviour, so literal
-        // arguments do not make them tautological.
         if MOCK_ASSERTION_PREFIXES
             .iter()
             .any(|prefix| name.starts_with(prefix))
@@ -237,8 +216,7 @@ impl LanguageAdapter for Python {
             .filter(|n| n.kind() != "comment")
             .collect();
 
-        // Only assertions whose semantics we actually model. Anything else with
-        // constant arguments is left alone rather than guessed at.
+        // Only the forms whose semantics we model. Anything else stays `None`.
         match name {
             "assertTrue" => eval_const(*args.first()?, src).map(|v| v.truthy()),
             "assertFalse" => eval_const(*args.first()?, src).map(|v| !v.truthy()),
@@ -270,8 +248,7 @@ impl LanguageAdapter for Python {
     fn patched_symbols(&self, test: &TestFn<'_>, src: &str) -> Vec<String> {
         let mut out = Vec::new();
 
-        // Decorators hang off the parent `decorated_definition`, not the
-        // function node itself.
+        // Decorators hang off the parent `decorated_definition`.
         if let Some(parent) = test.node.parent()
             && parent.kind() == "decorated_definition"
         {
@@ -283,7 +260,6 @@ impl LanguageAdapter for Python {
             }
         }
 
-        // `mocker.patch(...)`, `with patch(...)`, `monkeypatch.setattr(...)`.
         collect_patch_targets(test.body, src, &mut out);
 
         out
@@ -308,7 +284,7 @@ impl LanguageAdapter for Python {
         if !catches_assertion_errors(node, src) {
             return false;
         }
-        // A handler that re-raises, asserts, or fails does not swallow.
+        // Re-raising, asserting, or failing means it isn't swallowing.
         for inner in descendants(node) {
             if inner.kind() == "raise_statement" || self.is_assertion(inner, src) {
                 return false;
@@ -331,7 +307,6 @@ impl LanguageAdapter for Python {
                     continue;
                 }
                 let Some(path) = decorator_path(child, src) else {
-                    // Could not read it, so we cannot rule it out.
                     return true;
                 };
                 if decorator_may_assert(&path) {
@@ -340,15 +315,13 @@ impl LanguageAdapter for Python {
             }
         }
 
-        // A decorated *nested* function is the same story one level down:
-        // SQLAlchemy's `test_update_whereclause` defines an inner `go()` carrying
-        // `@profiling.function_call_count()` and calls it.
+        // Same story a level down: an inner function carrying the decorator.
         descendants(test.body).any(|node| node.kind() == "decorated_definition")
     }
 
     fn body_returns_value(&self, body: Node<'_>) -> bool {
-        // Direct children only: a `return` inside a nested helper function says
-        // nothing about what the test itself hands back.
+        // Direct children only. A `return` inside a nested helper says nothing
+        // about what the test hands back.
         let mut cursor = body.walk();
         body.named_children(&mut cursor).any(|statement| {
             statement.kind() == "return_statement" && statement.named_child(0).is_some()
@@ -359,14 +332,11 @@ impl LanguageAdapter for Python {
         let mut cursor = body.walk();
         for stmt in body.named_children(&mut cursor) {
             match stmt.kind() {
-                // `pass`
                 "pass_statement" => continue,
                 "expression_statement" => {
-                    // A docstring or a bare `...` is not a real statement.
                     let inner = text(stmt, src).trim();
                     let is_docstring = inner.starts_with('"') || inner.starts_with('\'');
-                    let is_ellipsis = inner == "...";
-                    if is_docstring || is_ellipsis {
+                    if is_docstring || inner == "..." {
                         continue;
                     }
                     return false;
@@ -378,29 +348,21 @@ impl LanguageAdapter for Python {
     }
 }
 
-/// Would a test runner collect this function?
-///
-/// True for module-level functions and methods of classes. False for anything
-/// nested inside another function, however deeply.
+/// Module-level functions and class methods, yes. Anything nested inside another
+/// function, no.
 fn is_collectible(func: Node<'_>) -> bool {
     let mut parent = func.parent();
     while let Some(node) = parent {
         match node.kind() {
-            // Nested inside another function — never collected.
             "function_definition" => return false,
             "module" => return true,
-            // `block`, `class_definition`, `decorated_definition` — keep walking.
             _ => parent = node.parent(),
         }
     }
     true
 }
 
-/// The final segment of a call's callee.
-///
-/// `self.assertEqual(...)` -> `assertEqual`
 /// `np.testing.assert_allclose(...)` -> `assert_allclose`
-/// `foo(...)` -> `foo`
 fn callee_name<'a>(call: Node<'_>, src: &'a str) -> Option<&'a str> {
     let function = call.child_by_field_name("function")?;
     match function.kind() {
@@ -412,10 +374,9 @@ fn callee_name<'a>(call: Node<'_>, src: &'a str) -> Option<&'a str> {
     }
 }
 
-/// Decorators known not to assert anything. Anything absent from this list is
-/// assumed capable of asserting, so additions here should be deliberate.
+/// Decorators known not to assert. Anything missing from here is treated as
+/// capable of asserting, so add deliberately.
 const INERT_DECORATORS: &[&str] = &[
-    // pytest markers and fixtures
     "parametrize",
     "skip",
     "skipif",
@@ -430,40 +391,31 @@ const INERT_DECORATORS: &[&str] = &[
     "repeat",
     "django_db",
     "freeze_time",
-    // mock
     "patch",
     "object",
     "dict",
-    // builtins
     "staticmethod",
     "classmethod",
     "property",
 ];
 
-/// `pytest.mark.*` entries that *do* carry behaviour, contrary to the usual rule
-/// that a marker is inert. `benchmark` belongs to pytest-benchmark, where the
-/// fixture performs the measurement and the checking.
+/// `pytest.mark.*` entries that actually do something. pytest-benchmark's
+/// fixture measures and checks; the rest are labels.
 const ACTIVE_PYTEST_MARKERS: &[&str] = &["benchmark"];
 
-/// Could this decorator assert on the test's behalf?
 fn decorator_may_assert(path: &str) -> bool {
     let last = path.rsplit('.').next().unwrap_or(path);
 
     if INERT_DECORATORS.contains(&last) {
         return false;
     }
-    // A plain `pytest.mark.something` is just a label unless a plugin gives it
-    // behaviour.
     if path.starts_with("pytest.mark.") || path.starts_with("mark.") {
         return ACTIVE_PYTEST_MARKERS.contains(&last);
     }
     true
 }
 
-/// The dotted name a decorator refers to, without its arguments.
-///
 /// `@pytest.mark.benchmark(group='x')` -> `pytest.mark.benchmark`
-/// `@flaky`                            -> `flaky`
 fn decorator_path(decorator: Node<'_>, src: &str) -> Option<String> {
     let mut cursor = decorator.walk();
     let expression = decorator
@@ -477,7 +429,6 @@ fn decorator_path(decorator: Node<'_>, src: &str) -> Option<String> {
     Some(text(target, src).to_string())
 }
 
-/// A value we could work out without running anything.
 #[derive(Debug, Clone, PartialEq)]
 enum Const {
     Bool(bool),
@@ -488,7 +439,6 @@ enum Const {
 }
 
 impl Const {
-    /// Python's truthiness rules.
     fn truthy(&self) -> bool {
         match self {
             Const::Bool(b) => *b,
@@ -500,11 +450,9 @@ impl Const {
     }
 }
 
-/// Evaluate an expression that depends on nothing but literals.
-///
-/// Returns `None` the moment anything from the code under test appears, which is
-/// the common case and the safe default. Deliberately narrow: no arithmetic, no
-/// ordered comparisons. Every gap here is a missed finding, never a false one.
+/// Evaluates expressions built only from literals, and gives up as soon as
+/// anything else appears. No arithmetic, no ordered comparisons: a gap here
+/// costs a missed finding, which is cheaper than a wrong one.
 fn eval_const(node: Node<'_>, src: &str) -> Option<Const> {
     match node.kind() {
         "true" => Some(Const::Bool(true)),
@@ -520,7 +468,7 @@ fn eval_const(node: Node<'_>, src: &str) -> Option<Const> {
             .parse()
             .ok()
             .map(Const::Float),
-        // An empty string has no `string_content` child, hence the fallback.
+        // Empty strings have no `string_content` child.
         "string" => Some(Const::Str(
             string_literal_value(node, src).unwrap_or("").to_string(),
         )),
@@ -544,8 +492,8 @@ fn eval_const(node: Node<'_>, src: &str) -> Option<Const> {
     }
 }
 
-/// Only the two-operand equality and identity forms. Chained comparisons and
-/// ordered ones (`<`, `>=`) return `None` rather than risk being wrong.
+/// Two-operand equality and identity only. Chained and ordered comparisons give
+/// up rather than risk being wrong.
 fn eval_comparison(node: Node<'_>, src: &str) -> Option<Const> {
     let mut cursor = node.walk();
     let mut operands = Vec::new();
@@ -566,7 +514,7 @@ fn eval_comparison(node: Node<'_>, src: &str) -> Option<Const> {
 
     let left = eval_const(operands[0], src)?;
     let right = eval_const(operands[1], src)?;
-    // Joined so that `is not` and `not in` arrive as one token.
+    // Joined so `is not` arrives as one token.
     match operators.join(" ").as_str() {
         "==" | "is" => Some(Const::Bool(left == right)),
         "!=" | "is not" => Some(Const::Bool(left != right)),
@@ -574,11 +522,8 @@ fn eval_comparison(node: Node<'_>, src: &str) -> Option<Const> {
     }
 }
 
-/// The text inside a string literal, without quotes or prefixes.
-///
-/// The grammar splits a string into `string_start` / `string_content` /
-/// `string_end`, so we can ask for the content directly rather than trying to
-/// strip `r`, `f`, and triple quotes by hand.
+/// Contents of a string literal. The grammar splits strings into start/content/
+/// end, so this avoids stripping `r`, `f` and triple quotes by hand.
 fn string_literal_value<'a>(node: Node<'_>, src: &'a str) -> Option<&'a str> {
     if node.kind() != "string" {
         return None;
@@ -595,7 +540,6 @@ fn last_dotted_segment(node: Node<'_>, src: &str) -> Option<String> {
     value.rsplit('.').next().map(|s| s.to_string())
 }
 
-/// Collect every symbol replaced by a mock within `root`.
 fn collect_patch_targets(root: Node<'_>, src: &str, out: &mut Vec<String>) {
     for node in descendants(root) {
         if node.kind() != "call" {
@@ -614,7 +558,7 @@ fn collect_patch_targets(root: Node<'_>, src: &str, out: &mut Vec<String>) {
             .collect();
 
         match name {
-            // patch("a.b.c"), mock.patch("a.b.c"), mocker.patch("a.b.c")
+            // patch("a.b.c"), mock.patch(...), mocker.patch(...)
             "patch" => {
                 if let Some(first) = arg_nodes.first()
                     && let Some(symbol) = last_dotted_segment(*first, src)
@@ -622,7 +566,7 @@ fn collect_patch_targets(root: Node<'_>, src: &str, out: &mut Vec<String>) {
                     out.push(symbol);
                 }
             }
-            // patch.object(SomeClass, "method") — `callee_name` yields "object".
+            // patch.object(SomeClass, "method")
             "object" => {
                 if let Some(second) = arg_nodes.get(1)
                     && let Some(symbol) = string_literal_value(*second, src)
@@ -630,8 +574,7 @@ fn collect_patch_targets(root: Node<'_>, src: &str, out: &mut Vec<String>) {
                     out.push(symbol.to_string());
                 }
             }
-            // monkeypatch.setattr(module, "name", replacement)
-            // monkeypatch.setattr("module.name", replacement)
+            // monkeypatch.setattr(mod, "name", repl) or setattr("mod.name", repl)
             "setattr" => {
                 let from_second = arg_nodes.get(1).and_then(|n| string_literal_value(*n, src));
                 if let Some(symbol) = from_second {
@@ -647,26 +590,20 @@ fn collect_patch_targets(root: Node<'_>, src: &str, out: &mut Vec<String>) {
     }
 }
 
-/// Would this handler catch a failed assertion?
-///
-/// `except ValueError:` would not — an `AssertionError` escapes it — so only
-/// bare handlers and those naming `Exception`/`BaseException`/`AssertionError`
-/// count.
 fn catches_assertion_errors(clause: Node<'_>, src: &str) -> bool {
     let mut cursor = clause.walk();
     for child in clause.named_children(&mut cursor) {
-        // Comments are named nodes, so `except:  # noqa` would otherwise look
-        // like it names an exception type.
+        // Comments are named nodes, so `except:  # noqa` would otherwise read as
+        // an exception type.
         if matches!(child.kind(), "block" | "comment") {
             continue;
         }
-        // The first remaining child is the exception expression.
         let rendered = text(child, src);
         return ASSERTION_CATCHING
             .iter()
             .any(|exception| rendered.contains(exception));
     }
-    // A bare `except:` catches everything, including assertion failures.
+    // Bare `except:` catches everything.
     true
 }
 
@@ -687,14 +624,11 @@ mod tests {
 
     #[test]
     fn ignores_non_test_files() {
-        // Not Python at all.
         assert!(!is_test("tests/test_auth.pyc"));
         assert!(!is_test("README.md"));
-        // Helper modules living beside tests are not collected by pytest, and
-        // scanning them would produce findings for code nobody calls a test.
+        // Helper modules beside tests aren't collected by pytest.
         assert!(!is_test("tests/helpers.py"));
         assert!(!is_test("tests/factories.py"));
-        // conftest.py holds fixtures, never tests.
         assert!(!is_test("tests/conftest.py"));
     }
 }

@@ -1,4 +1,4 @@
-"""Assertions sitting after an early exit."""
+"""Assertions stranded after an early exit."""
 
 
 def test_return_before_assert():

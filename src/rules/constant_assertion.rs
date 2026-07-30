@@ -1,12 +1,8 @@
-//! Rule: `constant-assertion` — the test only asserts on literals.
+//! Assertions on literals only: `assert True`, `assert 1 == 1`,
+//! `self.assertEqual(2, 2)`. Nothing from the code under test appears in them.
 //!
-//! `assert True`, `assert 1 == 1`, `self.assertEqual(2, 2)`. Nothing from the
-//! code under test appears in the assertion, so it holds regardless of what the
-//! code does.
-//!
-//! We flag only when *every* assertion in the test is constant. A stray
-//! `assert True` alongside real checks is untidy, not vacuous, and reporting it
-//! would be the sort of noise that gets a linter uninstalled.
+//! Fires only when every assertion in the test is like this. A stray
+//! `assert True` next to real checks is untidy, not vacuous.
 
 use super::{Rule, RuleCtx};
 use crate::parse::{descendants, line_of, snippet};

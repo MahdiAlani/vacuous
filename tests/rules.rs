@@ -1,8 +1,5 @@
-//! Rule behaviour, driven by the paired fixtures in `tests/fixtures`.
-//!
-//! Every rule gets two tests: one proving it catches what it claims to, and one
-//! proving it stays quiet on legitimate code. The second is the load-bearing
-//! one — a rule that cries wolf is worse than no rule.
+//! Driven by the fixture pairs under `tests/fixtures`. Each check gets one test
+//! for what it should catch and one for what it shouldn't.
 
 use std::path::{Path, PathBuf};
 
@@ -14,8 +11,7 @@ fn fixture(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(rel)
 }
 
-/// Scan a fixture at the lowest confidence so no finding can hide behind the
-/// default filter.
+/// Lowest confidence, so nothing hides behind the default filter.
 fn scan(rel: &str) -> Report {
     let path = fixture(rel);
     let mut outcome = vacuous::check(&path, &Python).expect("scan should succeed");
@@ -28,7 +24,7 @@ fn scan(rel: &str) -> Report {
     outcome.report
 }
 
-/// Test names flagged by one specific rule, in report order.
+/// Names flagged by one check, in report order.
 fn flagged_by(rule_dir: &str, rule: &str) -> Vec<String> {
     scan(&format!("tests/fixtures/python/{rule_dir}/should_flag.py"))
         .findings
@@ -38,8 +34,7 @@ fn flagged_by(rule_dir: &str, rule: &str) -> Vec<String> {
         .collect()
 }
 
-/// A negative fixture must produce no findings from *any* rule, not just the
-/// one it was written for. That catches cross-rule contamination too.
+/// No findings from *any* check, not just the one the fixture was written for.
 fn assert_no_findings(rule_dir: &str) {
     let rel = format!("tests/fixtures/python/{rule_dir}/should_not_flag.py");
     let report = scan(&rel);
@@ -79,7 +74,7 @@ fn patched_target_flags_tests_that_mock_their_own_subject() {
 }
 
 #[test]
-fn patched_target_hedges_because_naming_is_a_convention() {
+fn patched_target_never_claims_certain() {
     let report = scan("tests/fixtures/python/patched_target/should_flag.py");
     assert!(
         report
@@ -87,8 +82,7 @@ fn patched_target_hedges_because_naming_is_a_convention() {
             .iter()
             .filter(|f| f.rule == "patched-target-under-test")
             .all(|f| f.confidence == Confidence::Likely),
-        "inferring a subject from a test's name is not a structural fact, \
-         so this rule must never claim `certain`: {:#?}",
+        "a subject inferred from a test name is a convention, not a fact: {:#?}",
         report.findings
     );
 }
@@ -177,9 +171,8 @@ fn no_assertions_stays_quiet_on_real_tests() {
     assert_eq!(report.tests_scanned, 19);
 }
 
-/// Regression test for a false positive found by scanning flask: view functions
-/// and CLI commands nested inside tests are commonly named `test` or `testcmd`,
-/// but no test runner collects them.
+/// Flask names route handlers `test` and Click commands `testcmd`, both nested
+/// inside real tests. No runner collects them.
 #[test]
 fn nested_functions_are_not_collected_as_tests() {
     let src = r#"
@@ -206,8 +199,7 @@ def test_real(client):
     );
 }
 
-/// Regression test for the other flask false positive: a same-file helper that
-/// asserts, whose name gives no hint that it does.
+/// A same-file helper that asserts, with a name giving no hint of it.
 #[test]
 fn local_asserting_helpers_are_resolved_transitively() {
     let src = r#"

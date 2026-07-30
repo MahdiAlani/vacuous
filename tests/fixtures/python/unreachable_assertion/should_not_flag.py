@@ -1,10 +1,9 @@
-"""Early exits that leave the assertions perfectly reachable."""
+"""Early exits that leave the assertions reachable."""
 
 
 def test_conditional_return():
-    # The `return` is nested inside an `if`, so it does not kill its siblings.
-    # A rule that looked at descendants instead of direct children would get
-    # this wrong.
+    # Nested in an `if`, so it doesn't kill its siblings. Looking at descendants
+    # instead of direct children would get this wrong.
     if not feature_enabled():
         return
     assert compute() == 1

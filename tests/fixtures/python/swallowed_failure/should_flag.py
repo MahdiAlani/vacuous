@@ -1,4 +1,4 @@
-"""Assertions that cannot fail because a handler discards them."""
+"""The handler throws the assertion failure away."""
 
 
 def test_bare_except():

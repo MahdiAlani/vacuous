@@ -14,14 +14,8 @@ pub fn parse(language: &tree_sitter::Language, src: &str) -> Result<Tree> {
         .context("tree-sitter returned no tree")
 }
 
-/// Depth-first iterator over `root` and all of its descendants, in document order.
-///
-/// Rules are written against this rather than raw tree-sitter cursors because it
-/// makes them read declaratively:
-///
-/// ```ignore
-/// descendants(test.node).any(|n| adapter.is_assertion(n, src))
-/// ```
+/// `root` and everything under it, depth-first in document order. Nicer to write
+/// checks against than raw cursors.
 pub fn descendants<'t>(root: Node<'t>) -> Descendants<'t> {
     Descendants { stack: vec![root] }
 }

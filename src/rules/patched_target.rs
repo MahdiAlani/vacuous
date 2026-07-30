@@ -1,4 +1,4 @@
-//! Rule: `patched-target-under-test` — the test mocks the thing it is named for.
+//! The test mocks out the function it's named after, then only checks the mock:
 //!
 //! ```python
 //! @patch("myapp.billing.charge_card")
@@ -7,10 +7,8 @@
 //!     mock_charge.assert_called_once()
 //! ```
 //!
-//! The real `charge_card` never runs. The test passes if the mock was called,
-//! which it was, because the test called it. This is one of the most common
-//! shapes in agent-written suites and one of the most misleading, because it
-//! looks rigorous and reports as covered.
+//! The real `charge_card` never runs. It passes because the mock was called, and
+//! the mock was called because the test called it.
 
 use super::{Rule, RuleCtx};
 use crate::parse::descendants;
@@ -42,13 +40,11 @@ impl Rule for PatchedTargetUnderTest {
 
         // Requirement 2: every assertion is about a mock.
         //
-        // This second condition is what makes the rule trustworthy. Patching a
-        // same-named dependency is completely normal — rich patches
-        // `builtins.input` inside `test_input` while asserting on real captured
-        // output, and requests patches `requests.help.idna` to *create* the
-        // condition under test. Both assert on real values, so both are excluded
-        // here. What is left is the genuinely circular case: the subject was
-        // replaced by a mock, and nothing but that mock was ever checked.
+        // Patching a same-named dependency is routine. rich patches
+        // `builtins.input` in `test_input` but asserts on real captured output;
+        // requests patches `requests.help.idna` to set up the condition it's
+        // testing. Both check real values, so neither is circular. Requiring
+        // mock-only assertions is what separates those from the real thing.
         let mut assertions = 0usize;
         let mut mock_assertions = 0usize;
         for node in descendants(ctx.test.body) {
