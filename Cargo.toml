@@ -4,28 +4,20 @@ version = "0.1.0"
 edition = "2024"
 # Floor is set by edition 2024 (1.85), `is_multiple_of` (1.87), and let-chains (1.88).
 rust-version = "1.88"
-description = "Find the tests that cannot fail"
+description = "Finds Python tests that pass no matter what your code does"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["testing", "linter", "pytest", "test-quality", "static-analysis"]
 categories = ["development-tools::testing", "command-line-utilities"]
 repository = "https://github.com/MahdiAlani/vacuous"
-# Keeps the published crate small: the corpus fixtures are for development only.
 exclude = ["/.github", "/.claude"]
 
 [dependencies]
 anstream = "1"
 anstyle = "1"
 anyhow = "1"
-blake3 = "1"
 clap = { version = "4", features = ["derive"] }
 ignore = "0.4"
 rayon = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 tree-sitter = "0.26"
 tree-sitter-python = "0.25"
-
-[dev-dependencies]
-insta = "1"
-tempfile = "3"
