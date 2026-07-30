@@ -9,8 +9,9 @@ license = "MIT OR Apache-2.0"
 readme = "README.md"
 keywords = ["testing", "linter", "pytest", "test-quality", "static-analysis"]
 categories = ["development-tools::testing", "command-line-utilities"]
-# TODO: set once the GitHub repo exists.
-# repository = "https://github.com/<you>/vacuous"
+repository = "https://github.com/MahdiAlani/vacuous"
+# Keeps the published crate small: the corpus fixtures are for development only.
+exclude = ["/.github", "/.claude"]
 
 [dependencies]
 anstream = "1"

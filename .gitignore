@@ -1,5 +1,8 @@
 /target
 
+# Internal competitive research and launch planning — deliberately not published.
+RESEARCH.md
+
 # Machine-local Claude Code permissions, not shared config
 .claude/settings.local.json
 
