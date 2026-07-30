@@ -1,0 +1,11 @@
+/target
+
+# Machine-local Claude Code permissions, not shared config
+.claude/settings.local.json
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+.DS_Store
