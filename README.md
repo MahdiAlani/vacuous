@@ -29,19 +29,19 @@ No network, no API keys.
 ## Install
 
 ```console
+uv tool install vacuous
+```
+
+or `pipx install vacuous`, or `pip install vacuous`. There are prebuilt wheels
+for Linux, macOS and Windows, so this needs no Rust toolchain.
+
+If you'd rather build it yourself:
+
+```console
 cargo install vacuous
 ```
 
-Or from source, if you'd rather:
-
-```console
-git clone https://github.com/MahdiAlani/vacuous
-cd vacuous
-cargo build --release
-```
-
-Needs Rust 1.88 or newer. Wheels are on the way, so `uv tool install vacuous`
-will work without a Rust toolchain.
+Needs Rust 1.88 or newer.
 
 ## Usage
 
