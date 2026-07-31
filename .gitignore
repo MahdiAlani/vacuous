@@ -1,6 +1,10 @@
 /target
 
-# Internal competitive research and launch planning — deliberately not published.
+# Built wheels and sdists. Must stay ignored, or `maturin sdist` packages the
+# previous build's wheel into the source archive.
+/dist
+
+# Local notes.
 RESEARCH.md
 
 # Machine-local Claude Code permissions, not shared config

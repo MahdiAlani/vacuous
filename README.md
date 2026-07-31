@@ -28,16 +28,20 @@ No network, no API keys.
 
 ## Install
 
-Not on PyPI or crates.io yet. For now:
+```console
+cargo install vacuous
+```
+
+Or from source, if you'd rather:
 
 ```console
 git clone https://github.com/MahdiAlani/vacuous
 cd vacuous
 cargo build --release
-./target/release/vacuous check /path/to/project
 ```
 
-Needs Rust 1.88 or newer.
+Needs Rust 1.88 or newer. Wheels are on the way, so `uv tool install vacuous`
+will work without a Rust toolchain.
 
 ## Usage
 

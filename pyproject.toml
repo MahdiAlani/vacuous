@@ -1,0 +1,32 @@
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "vacuous"
+description = "Finds Python tests that pass no matter what your code does"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT OR Apache-2.0"
+license-files = ["LICENSE-MIT", "LICENSE-APACHE"]
+keywords = ["testing", "linter", "pytest", "test-quality", "static-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Software Development :: Quality Assurance",
+]
+# Taken from Cargo.toml so there is one place to bump the version.
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/MahdiAlani/vacuous"
+Issues = "https://github.com/MahdiAlani/vacuous/issues"
+
+[tool.maturin]
+# The crate has both a lib and a bin target, so maturin can't infer this.
+# Without it, it would look for a Python extension module and fail.
+bindings = "bin"
+strip = true
