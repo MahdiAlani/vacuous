@@ -81,7 +81,7 @@ fixed, `vacuous` says how many entries are stale and you can re-record.
 ```yaml
 repos:
   - repo: https://github.com/MahdiAlani/vacuous-pre-commit
-    rev: v0.1.0
+    rev: v0.1.1
     hooks:
       - id: vacuous
 ```
