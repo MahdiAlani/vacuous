@@ -101,6 +101,8 @@ fn swallowed_failure_flags_discarded_assertions() {
             "test_catches_exception",
             "test_catches_assertion_error",
             "test_catches_exception_and_only_logs",
+            "test_catches_a_tuple_including_exception",
+            "test_catches_dotted_base_exception",
         ]
     );
 }

@@ -290,7 +290,11 @@ impl LanguageAdapter for Python {
                 return false;
             }
         }
-        true
+        // A handler that does anything else may be recording the failure to
+        // surface later. numpy collects tracebacks from worker threads into a
+        // list and asserts on it afterwards, which is the only way to get an
+        // assertion inside a thread to fail the test.
+        handler_body_is_inert(node, src)
     }
 
     fn is_terminating_statement(&self, node: Node<'_>) -> bool {
@@ -590,6 +594,64 @@ fn collect_patch_targets(root: Node<'_>, src: &str, out: &mut Vec<String>) {
     }
 }
 
+/// Calls that consume an exception without preserving it.
+const DISCARDING_CALLS: &[&str] = &[
+    "print",
+    "print_exc",
+    "format_exc",
+    "warn",
+    "warning",
+    "debug",
+    "info",
+    "error",
+    "exception",
+    "critical",
+    "log",
+];
+
+/// Does this handler genuinely throw the failure away?
+///
+/// Only `pass`, a docstring, or a logging call count. Anything else — an
+/// append, an assignment, a call we don't recognise — might be stashing the
+/// exception for a later assertion, and we would rather miss that than accuse
+/// a test that does the right thing.
+fn handler_body_is_inert(clause: Node<'_>, src: &str) -> bool {
+    let mut cursor = clause.walk();
+    let Some(block) = clause
+        .named_children(&mut cursor)
+        .find(|child| child.kind() == "block")
+    else {
+        return false;
+    };
+
+    let mut statements = block.walk();
+    for statement in block.named_children(&mut statements) {
+        match statement.kind() {
+            "pass_statement" | "comment" => continue,
+            "expression_statement" => {
+                let Some(inner) = statement.named_child(0) else {
+                    return false;
+                };
+                match inner.kind() {
+                    // A docstring or bare `...`.
+                    "string" | "ellipsis" => continue,
+                    "call" => {
+                        let Some(name) = callee_name(inner, src) else {
+                            return false;
+                        };
+                        if !DISCARDING_CALLS.contains(&name) {
+                            return false;
+                        }
+                    }
+                    _ => return false,
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
 fn catches_assertion_errors(clause: Node<'_>, src: &str) -> bool {
     let mut cursor = clause.walk();
     for child in clause.named_children(&mut cursor) {
@@ -598,13 +660,44 @@ fn catches_assertion_errors(clause: Node<'_>, src: &str) -> bool {
         if matches!(child.kind(), "block" | "comment") {
             continue;
         }
-        let rendered = text(child, src);
-        return ASSERTION_CATCHING
+        let mut caught = Vec::new();
+        collect_exception_names(child, src, &mut caught);
+        return caught
             .iter()
-            .any(|exception| rendered.contains(exception));
+            .any(|name| ASSERTION_CATCHING.contains(&name.as_str()));
     }
     // Bare `except:` catches everything.
     true
+}
+
+/// Names of the exception types a handler catches.
+///
+/// Compared exactly rather than by substring: `TestingException` contains
+/// "Exception" but catches nothing an assertion would raise. pydantic uses
+/// exactly that, and substring matching reported it as a swallowed failure.
+fn collect_exception_names(node: Node<'_>, src: &str, out: &mut Vec<String>) {
+    match node.kind() {
+        "identifier" => out.push(text(node, src).to_string()),
+        // `except mod.Error:` — only the final segment names the type.
+        "attribute" => {
+            if let Some(attribute) = node.child_by_field_name("attribute") {
+                out.push(text(attribute, src).to_string());
+            }
+        }
+        // `except (A, B):` and `except A as err:` respectively.
+        "tuple" | "parenthesized_expression" | "expression_list" => {
+            let mut cursor = node.walk();
+            for child in node.named_children(&mut cursor) {
+                collect_exception_names(child, src, out);
+            }
+        }
+        "as_pattern" => {
+            if let Some(first) = node.named_child(0) {
+                collect_exception_names(first, src, out);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]

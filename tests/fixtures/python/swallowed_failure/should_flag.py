@@ -27,3 +27,17 @@ def test_catches_exception_and_only_logs():
         assert compute() == 4
     except Exception as exc:
         print(exc)
+
+
+def test_catches_a_tuple_including_exception():
+    try:
+        assert compute() == 5
+    except (ValueError, Exception):
+        pass
+
+
+def test_catches_dotted_base_exception():
+    try:
+        assert compute() == 6
+    except builtins.BaseException:
+        pass
