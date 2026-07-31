@@ -61,6 +61,8 @@ pub struct Report {
     pub findings: Vec<Finding>,
     pub tests_scanned: usize,
     pub files_scanned: usize,
+    /// Hidden by a baseline. Shown in the summary so they aren't invisible.
+    pub suppressed: usize,
 }
 
 impl Report {
@@ -69,6 +71,7 @@ impl Report {
         self.findings.extend(other.findings);
         self.tests_scanned += other.tests_scanned;
         self.files_scanned += other.files_scanned;
+        self.suppressed += other.suppressed;
     }
 
     /// Files finish parsing in arbitrary order, so sort before printing.
@@ -101,6 +104,13 @@ pub fn print_pretty(report: &Report, root: &std::path::Path) {
             "  {green}No vacuous tests found{green:#} in {} tests across {} files.",
             report.tests_scanned, report.files_scanned
         );
+        if report.suppressed > 0 {
+            println!(
+                "  {dim}{} existing {} hidden by the baseline{dim:#}",
+                thousands(report.suppressed),
+                plural(report.suppressed, "finding", "findings")
+            );
+        }
         println!();
         return;
     }
@@ -124,7 +134,7 @@ pub fn print_pretty(report: &Report, root: &std::path::Path) {
     let locations: Vec<String> = report
         .findings
         .iter()
-        .map(|f| format!("{}:{}", display_path(&f.file, root), f.line))
+        .map(|f| format!("{}:{}", relative_path(&f.file, root), f.line))
         .collect();
     let loc_width = locations.iter().map(|l| l.len()).max().unwrap_or(0);
     let rule_width = report
@@ -150,22 +160,31 @@ pub fn print_pretty(report: &Report, root: &std::path::Path) {
         thousands(report.files_scanned),
         plural(report.files_scanned, "file", "files")
     );
+    if report.suppressed > 0 {
+        println!(
+            "  {dim}{} existing {} hidden by the baseline{dim:#}",
+            thousands(report.suppressed),
+            plural(report.suppressed, "finding", "findings")
+        );
+    }
     println!();
 }
 
-/// Relative to the scan root, except when the root *is* the file, where
-/// `strip_prefix` leaves nothing.
-fn display_path<'a>(
-    file: &'a std::path::Path,
-    root: &std::path::Path,
-) -> std::borrow::Cow<'a, str> {
+/// Path relative to the scan root, always with forward slashes.
+///
+/// Normalising matters beyond looks: SARIF requires forward slashes, and a
+/// baseline written on Windows has to match one read on Linux.
+///
+/// When the root *is* the file, `strip_prefix` leaves nothing, so fall back to
+/// the file name.
+pub fn relative_path(file: &std::path::Path, root: &std::path::Path) -> String {
     let relative = file.strip_prefix(root).unwrap_or(file);
     let shown = if relative.as_os_str().is_empty() {
         std::path::Path::new(file.file_name().unwrap_or_default())
     } else {
         relative
     };
-    shown.to_string_lossy()
+    shown.to_string_lossy().replace('\\', "/")
 }
 
 fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
@@ -204,14 +223,24 @@ mod tests {
     fn single_file_scan_shows_the_file_name() {
         let file = std::path::Path::new("tests/fixtures/should_flag.py");
         // root == the file itself, as happens with `vacuous check some_file.py`
-        assert_eq!(display_path(file, file), "should_flag.py");
+        assert_eq!(relative_path(file, file), "should_flag.py");
     }
 
     #[test]
     fn directory_scan_shows_a_relative_path() {
         let file = std::path::Path::new("repo/tests/test_auth.py");
         let root = std::path::Path::new("repo");
-        assert_eq!(display_path(file, root), "tests/test_auth.py");
+        assert_eq!(relative_path(file, root), "tests/test_auth.py");
+    }
+
+    /// SARIF requires forward slashes, and baselines have to survive being
+    /// written on one platform and read on another. Built from components so
+    /// the separator is whatever this platform uses.
+    #[test]
+    fn paths_are_normalised_to_forward_slashes() {
+        let file: std::path::PathBuf = ["repo", "tests", "test_auth.py"].iter().collect();
+        let root = std::path::Path::new("repo");
+        assert_eq!(relative_path(&file, root), "tests/test_auth.py");
     }
 
     #[test]

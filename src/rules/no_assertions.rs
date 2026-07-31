@@ -14,6 +14,10 @@ impl Rule for NoAssertions {
         "no-assertions"
     }
 
+    fn description(&self) -> &'static str {
+        "The test contains nothing that can fail, so it passes unless the code raises."
+    }
+
     fn check(&self, ctx: &RuleCtx) -> Vec<Finding> {
         let mut delegates_to_helper = false;
 

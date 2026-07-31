@@ -24,6 +24,10 @@ impl Rule for PatchedTargetUnderTest {
         "patched-target-under-test"
     }
 
+    fn description(&self) -> &'static str {
+        "The test mocks the function it is named for, then only asserts on that mock."
+    }
+
     fn check(&self, ctx: &RuleCtx) -> Vec<Finding> {
         let Some(subject) = ctx.adapter.implied_subject(&ctx.test.name) else {
             return Vec::new();

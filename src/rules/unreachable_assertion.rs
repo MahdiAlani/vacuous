@@ -21,6 +21,10 @@ impl Rule for UnreachableAssertion {
         "unreachable-assertion"
     }
 
+    fn description(&self) -> &'static str {
+        "The assertion sits after a return or raise, so it never runs."
+    }
+
     fn check(&self, ctx: &RuleCtx) -> Vec<Finding> {
         let mut findings = Vec::new();
 

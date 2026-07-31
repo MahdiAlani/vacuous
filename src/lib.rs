@@ -4,8 +4,10 @@
 //! test functions, and run every check over them. Files go in parallel; the
 //! report is sorted afterwards so output stays deterministic.
 
+pub mod baseline;
 pub mod discover;
 pub mod lang;
+pub mod output;
 pub mod parse;
 pub mod report;
 pub mod rules;
@@ -75,6 +77,7 @@ fn scan_file(
         findings: Vec::new(),
         tests_scanned: tests.len(),
         files_scanned: 1,
+        ..Default::default()
     };
 
     for test in &tests {

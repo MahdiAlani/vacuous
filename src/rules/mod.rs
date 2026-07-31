@@ -32,6 +32,9 @@ pub trait Rule: Send + Sync {
     /// Stable id, used in output and config.
     fn name(&self) -> &'static str;
 
+    /// One line, for `--format sarif` and docs.
+    fn description(&self) -> &'static str;
+
     fn check(&self, ctx: &RuleCtx) -> Vec<Finding>;
 }
 

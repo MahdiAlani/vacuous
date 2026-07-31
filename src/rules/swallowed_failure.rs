@@ -22,6 +22,10 @@ impl Rule for SwallowedFailure {
         "swallowed-failure"
     }
 
+    fn description(&self) -> &'static str {
+        "An exception handler discards the assertion failure, so the test cannot fail."
+    }
+
     fn check(&self, ctx: &RuleCtx) -> Vec<Finding> {
         let mut findings = Vec::new();
 

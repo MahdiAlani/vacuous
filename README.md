@@ -48,10 +48,59 @@ Needs Rust 1.88 or newer.
 ```
 vacuous check [PATH]              # defaults to the current directory
   --min-confidence <LEVEL>        # certain | likely | possible  (default: likely)
+  --format <FORMAT>               # pretty | json | sarif        (default: pretty)
+  --baseline <FILE>               # defaults to .vacuous-baseline.json if present
+  --no-baseline                   # report everything, baseline included
+
+vacuous baseline [PATH]           # record what's there today
 ```
 
 Exits `0` when clean, `1` when it finds something, `2` if the tool itself fell
 over — so CI can tell a real failure apart from a broken run.
+
+## Adding it to an existing project
+
+Any codebase of any age will have findings already, and nobody is going to fix
+two hundred of them before their next commit. Record them once:
+
+```console
+$ vacuous baseline
+vacuous: recorded 144 findings in .vacuous-baseline.json
+vacuous: `vacuous check` will now report only new ones
+```
+
+Commit that file. From then on `vacuous check` passes, and only fails when
+someone adds a *new* test that can't fail.
+
+Entries are keyed on the rule, file and test name, deliberately not the line
+number, so editing a file doesn't invalidate the baseline. When findings get
+fixed, `vacuous` says how many entries are stale and you can re-record.
+
+## pre-commit
+
+```yaml
+repos:
+  - repo: https://github.com/MahdiAlani/vacuous-pre-commit
+    rev: v0.1.0
+    hooks:
+      - id: vacuous
+```
+
+Installs from the PyPI wheel, so contributors don't need Rust.
+
+## CI
+
+```yaml
+- run: vacuous check --format sarif > vacuous.sarif
+  continue-on-error: true
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: vacuous.sarif
+```
+
+Findings then show up as annotations on the pull request. `certain` maps to
+`error`, `likely` to `warning`, `possible` to `note`; GitHub won't block merges
+on any of them unless you configure it to.
 
 ## Checks
 
@@ -132,15 +181,15 @@ shouldn't.
 
 ## Planned
 
-Config in `pyproject.toml`. A baseline file, so an existing project can fail only
-on new findings instead of drowning in old ones. JSON and SARIF output. A
-pre-commit hook. Wheels, so `uvx vacuous` works.
+Config in `pyproject.toml`, so per-project settings live where the rest of your
+tooling is configured. Per-line suppression comments.
 
 After that, a `verify` mode: stub out a function, run the tests, and see whether
 anything notices. Scoped to a diff it's quick enough to be useful, and it answers
-the question this tool can only approximate statically.
+directly what this tool can only approximate by reading code.
 
-TypeScript, eventually.
+TypeScript, eventually. The checks don't know they're looking at Python — that
+lives behind one trait — so it's a new adapter rather than a rewrite.
 
 ## License
 

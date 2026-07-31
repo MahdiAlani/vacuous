@@ -15,6 +15,10 @@ impl Rule for ConstantAssertion {
         "constant-assertion"
     }
 
+    fn description(&self) -> &'static str {
+        "Every assertion is on literals, so none of them involve the code under test."
+    }
+
     fn check(&self, ctx: &RuleCtx) -> Vec<Finding> {
         let mut total = 0usize;
         let mut always_passes = 0usize;
