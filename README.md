@@ -116,6 +116,13 @@ Each finding carries a confidence. `certain` means it's a structural fact about
 the code; `likely` means there's a judgement call involved. Only `certain` and
 `likely` show by default.
 
+`no-assertions` is graded rather than fixed, because it catches two different
+things. A body of `pass` or a lone docstring is a stub and gets `certain`. A body
+that calls real code but asserts nothing gets `likely`, because it might be a
+deliberate crash-or-hang regression test — numpy has several, and that's the
+right way to test "this used to segfault". Nothing static can tell those apart,
+so `--min-confidence certain` gives you only the indefensible ones.
+
 ## What it deliberately ignores
 
 Tests without assertions aren't automatically bad, which is the main reason

@@ -10,7 +10,7 @@ readme = "README.md"
 keywords = ["testing", "linter", "pytest", "test-quality", "static-analysis"]
 categories = ["development-tools::testing", "command-line-utilities"]
 repository = "https://github.com/MahdiAlani/vacuous"
-exclude = ["/.github", "/.claude", "/dist"]
+exclude = ["/.github", "/.claude", "/dist", "/tools"]
 
 [dependencies]
 anstream = "1"

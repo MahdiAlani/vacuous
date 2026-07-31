@@ -149,11 +149,30 @@ fn no_assertions_flags_tests_that_cannot_fail() {
     );
     assert_eq!(report.tests_scanned, 5);
     assert!(report.findings.iter().all(|f| f.rule == "no-assertions"));
-    assert!(
-        report
-            .findings
-            .iter()
-            .all(|f| f.confidence == Confidence::Certain)
+    // Confidence is graded per body, covered by the next test.
+}
+
+/// A stub is indefensible; a test that exercises code but asserts nothing may
+/// be a deliberate crash-regression test, so it must never claim `certain`.
+#[test]
+fn no_assertions_grades_stubs_above_tests_that_run_code() {
+    let report = scan("tests/fixtures/python/no_assertions/should_flag.py");
+    let graded: Vec<(&str, Confidence)> = report
+        .findings
+        .iter()
+        .map(|f| (f.test_name.as_str(), f.confidence))
+        .collect();
+
+    assert_eq!(
+        graded,
+        vec![
+            // Calls create_user() and save(), so it might be a smoke test.
+            ("test_creates_user", Confidence::Likely),
+            ("test_empty_body", Confidence::Certain),
+            ("test_only_a_docstring", Confidence::Certain),
+            ("test_ellipsis_body", Confidence::Certain),
+            ("test_calls_and_prints", Confidence::Likely),
+        ]
     );
 }
 
@@ -250,8 +269,8 @@ fn empty_body_gets_a_distinct_message() {
         .find(|f| f.test_name == "test_creates_user")
         .expect("test_creates_user should be flagged");
     assert!(
-        populated.message.contains("no assertions"),
-        "expected a no-assertions message, got: {}",
+        populated.message.contains("asserts nothing"),
+        "expected a runs-code-but-asserts-nothing message, got: {}",
         populated.message
     );
 }

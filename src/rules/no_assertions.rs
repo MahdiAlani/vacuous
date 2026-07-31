@@ -1,6 +1,13 @@
 //! A test body with nothing in it that can fail. It passes for exactly one
 //! reason: the code didn't raise. Coverage counts it either way.
 //!
+//! Two quite different things get caught here, so they are graded differently.
+//! A body of `pass` or a lone docstring is a stub, and nothing defends it.
+//! A body that calls real code but asserts nothing might be a deliberate
+//! crash-or-hang regression test — numpy has several, and they are the right
+//! way to test "this used to segfault". Statically the two are
+//! indistinguishable, so the second only ever gets `likely`.
+//!
 //! Most of what follows is the four ways this conclusion can be wrong.
 
 use super::{Rule, RuleCtx};
@@ -61,18 +68,24 @@ impl Rule for NoAssertions {
             return Vec::new();
         }
 
-        let message = if ctx.adapter.is_empty_body(ctx.test.body, ctx.src) {
-            format!("`{}` has an empty body — it can never fail.", ctx.test.name)
+        let (confidence, message) = if ctx.adapter.is_empty_body(ctx.test.body, ctx.src) {
+            (
+                Confidence::Certain,
+                format!("`{}` has an empty body — it can never fail.", ctx.test.name),
+            )
         } else {
-            format!(
-                "`{}` contains no assertions — it passes unless the code under test raises.",
-                ctx.test.name
+            (
+                Confidence::Likely,
+                format!(
+                    "`{}` runs code but asserts nothing — it only fails if that code raises.",
+                    ctx.test.name
+                ),
             )
         };
 
         vec![Finding {
             rule: self.name(),
-            confidence: Confidence::Certain,
+            confidence,
             file: ctx.path.to_path_buf(),
             line: ctx.test.line,
             test_name: ctx.test.name.clone(),
