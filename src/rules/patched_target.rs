@@ -74,6 +74,7 @@ impl Rule for PatchedTargetUnderTest {
             file: ctx.path.to_path_buf(),
             line: ctx.test.line,
             test_name: ctx.test.name.clone(),
+            test_line: ctx.test.line,
             message: format!(
                 "`{}` replaces `{symbol}` with a mock and then only asserts on that mock — the real `{symbol}` never runs.",
                 ctx.test.name

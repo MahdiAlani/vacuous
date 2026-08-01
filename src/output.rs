@@ -32,6 +32,8 @@ pub fn to_json(report: &Report, root: &Path) -> String {
         "version": env!("CARGO_PKG_VERSION"),
         "summary": {
             "findings": report.findings.len(),
+            // Lower than `findings` when one test yields several.
+            "tests_flagged": report.tests_flagged(),
             "suppressed": report.suppressed,
             "tests_scanned": report.tests_scanned,
             "files_scanned": report.files_scanned,

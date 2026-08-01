@@ -52,6 +52,7 @@ impl Rule for SwallowedFailure {
                     file: ctx.path.to_path_buf(),
                     line: line_of(assertion),
                     test_name: ctx.test.name.clone(),
+                    test_line: ctx.test.line,
                     message: format!(
                         "this assertion in `{}` is caught and discarded by the handler on line {} — it can never fail the test.",
                         ctx.test.name,

@@ -53,6 +53,11 @@ pub struct Finding {
     /// 1-based, pointing at whatever the check considers the offender.
     pub line: usize,
     pub test_name: String,
+    /// Line of the test's `def`. One test can produce several findings — a
+    /// disabled test strands every assertion after the `return` — so this is
+    /// how they're counted back to tests. Names alone aren't enough, since two
+    /// classes in one file can both define `test_foo`.
+    pub test_line: usize,
     pub message: String,
 }
 
@@ -87,6 +92,15 @@ impl Report {
     pub fn retain_at_least(&mut self, min: Confidence) {
         self.findings.retain(|f| f.confidence >= min);
     }
+
+    /// How many tests the findings actually cover.
+    pub fn tests_flagged(&self) -> usize {
+        self.findings
+            .iter()
+            .map(|f| (&f.file, f.test_line))
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+    }
 }
 
 /// `anstream` strips colour when piped and handles older Windows consoles.
@@ -115,19 +129,25 @@ pub fn print_pretty(report: &Report, root: &std::path::Path) {
         return;
     }
 
+    let flagged = report.tests_flagged();
     let pct = if report.tests_scanned == 0 {
         0.0
     } else {
-        100.0 * report.findings.len() as f64 / report.tests_scanned as f64
+        100.0 * flagged as f64 / report.tests_scanned as f64
     };
 
     println!(
         "  {bold}{} vacuous {}{bold:#} in {} ({:.1}%)",
-        report.findings.len(),
-        plural(report.findings.len(), "test", "tests"),
+        flagged,
+        plural(flagged, "test", "tests"),
         thousands(report.tests_scanned),
         pct
     );
+    // A disabled test strands every assertion after the `return`, so findings
+    // can outnumber the tests they came from.
+    if report.findings.len() != flagged {
+        println!("  {dim}{} findings in total{dim:#}", report.findings.len());
+    }
     println!();
 
     // Pad the location column so rule names line up.

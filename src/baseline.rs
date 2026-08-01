@@ -130,6 +130,7 @@ mod tests {
             file: PathBuf::from(file),
             line,
             test_name: test.to_string(),
+            test_line: line,
             message: "…".to_string(),
         }
     }

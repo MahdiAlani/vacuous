@@ -182,6 +182,8 @@ def main() -> int:
                             else:
                                 record["tests"] = report["summary"]["tests_scanned"]
                                 record["files"] = report["summary"]["files_scanned"]
+                                # Below findings when one test yields several.
+                                record["flagged"] = report["summary"]["tests_flagged"]
                                 record["findings"] = report["findings"]
                     finally:
                         shutil.rmtree(workdir, ignore_errors=True)

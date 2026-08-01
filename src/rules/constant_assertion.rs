@@ -69,6 +69,7 @@ impl Rule for ConstantAssertion {
             file: ctx.path.to_path_buf(),
             line: line_of(offender),
             test_name: ctx.test.name.clone(),
+            test_line: ctx.test.line,
             message,
         }]
     }

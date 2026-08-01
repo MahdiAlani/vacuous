@@ -89,6 +89,7 @@ impl Rule for NoAssertions {
             file: ctx.path.to_path_buf(),
             line: ctx.test.line,
             test_name: ctx.test.name.clone(),
+            test_line: ctx.test.line,
             message,
         }]
     }
