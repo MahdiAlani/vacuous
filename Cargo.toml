@@ -1,6 +1,6 @@
 [package]
 name = "vacuous"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 # Floor is set by edition 2024 (1.85), `is_multiple_of` (1.87), and let-chains (1.88).
 rust-version = "1.88"

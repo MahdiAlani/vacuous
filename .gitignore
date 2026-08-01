@@ -7,6 +7,10 @@
 # Local notes.
 RESEARCH.md
 
+# Corpus scan output. Regenerate with tools/corpus_scan.py.
+corpus.jsonl
+corpus-scan.log
+
 # Machine-local Claude Code permissions, not shared config
 .claude/settings.local.json
 
