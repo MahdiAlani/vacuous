@@ -192,6 +192,28 @@ fn no_assertions_stays_quiet_on_real_tests() {
     assert_eq!(report.tests_scanned, 19);
 }
 
+/// Assertion helpers usually live in a shared base class, often in a module no
+/// runner collects. pyflakes asserts through `self.flakes()` from
+/// `test/harness.py`; resolving per-file reported all 436 of its tests.
+#[test]
+fn asserting_helpers_resolve_across_files() {
+    let outcome = vacuous::check(
+        Path::new("tests/fixtures/python/cross_file_helpers"),
+        &Python,
+    )
+    .expect("scan should succeed");
+
+    let flagged: Vec<&str> = outcome
+        .report
+        .findings
+        .iter()
+        .map(|f| f.test_name.as_str())
+        .collect();
+
+    // The three helper-using tests are fine; the last one really does nothing.
+    assert_eq!(flagged, vec!["test_still_caught_when_nothing_asserts"]);
+}
+
 /// Flask names route handlers `test` and Click commands `testcmd`, both nested
 /// inside real tests. No runner collects them.
 #[test]

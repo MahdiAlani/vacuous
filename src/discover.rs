@@ -32,3 +32,36 @@ pub fn find_test_files(root: &Path, adapter: &dyn LanguageAdapter) -> Vec<PathBu
     files.sort();
     files
 }
+
+/// Python modules sitting beside the tests, which no runner collects.
+///
+/// Test suites keep their shared assertion helpers here: pyflakes asserts
+/// through `self.flakes()`, defined in `pyflakes/test/harness.py`. Without
+/// reading those, every test in the suite looks like it asserts nothing.
+///
+/// Only the directories that actually hold tests, rather than every `.py` file
+/// in the project, since helpers essentially always live next to their tests
+/// and walking a whole source tree would cost more than it finds.
+pub fn sibling_modules(test_files: &[PathBuf]) -> Vec<PathBuf> {
+    let mut directories: Vec<&Path> = test_files.iter().filter_map(|f| f.parent()).collect();
+    directories.sort();
+    directories.dedup();
+
+    let known: std::collections::HashSet<&Path> = test_files.iter().map(PathBuf::as_path).collect();
+
+    let mut modules: Vec<PathBuf> = directories
+        .into_iter()
+        .filter_map(|directory| std::fs::read_dir(directory).ok())
+        .flatten()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path.extension().and_then(|e| e.to_str()) == Some("py")
+                && !known.contains(path.as_path())
+        })
+        .collect();
+
+    modules.sort();
+    modules
+}

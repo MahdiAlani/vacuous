@@ -33,10 +33,10 @@ impl Rule for NoAssertions {
                 return Vec::new();
             }
 
-            // False-positive guard 1 (precise): the test calls a helper defined
-            // in this file that we have resolved as asserting.
+            // False-positive guard 1 (precise): the test calls a helper we
+            // resolved as asserting, from anywhere in the suite.
             if let Some(callee) = ctx.adapter.called_name(node, ctx.src)
-                && ctx.file.asserting_helpers.contains(callee)
+                && ctx.helpers.asserting.contains(callee)
             {
                 delegates_to_helper = true;
             }

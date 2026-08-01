@@ -14,17 +14,19 @@ mod patched_target;
 mod swallowed_failure;
 mod unreachable_assertion;
 
-/// Work shared by every test in a file. Separate from [`RuleCtx`] because
-/// building it is O(file), and doing that per test would be O(file × tests).
-pub struct FileCtx {
-    pub asserting_helpers: HashSet<String>,
+/// Functions that assert, gathered once for the whole scan.
+///
+/// Scan-wide rather than per-file because assertion helpers usually live in a
+/// shared base class, often in a module no test runner collects.
+pub struct Helpers {
+    pub asserting: HashSet<String>,
 }
 
 pub struct RuleCtx<'a, 't> {
     pub src: &'a str,
     pub path: &'a Path,
     pub adapter: &'a dyn LanguageAdapter,
-    pub file: &'a FileCtx,
+    pub helpers: &'a Helpers,
     pub test: &'a TestFn<'t>,
 }
 

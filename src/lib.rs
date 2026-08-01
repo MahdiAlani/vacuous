@@ -12,6 +12,7 @@ pub mod parse;
 pub mod report;
 pub mod rules;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -19,7 +20,7 @@ use rayon::prelude::*;
 
 use lang::LanguageAdapter;
 use report::Report;
-use rules::{FileCtx, Rule, RuleCtx};
+use rules::{Helpers, Rule, RuleCtx};
 
 #[derive(Debug, Default)]
 pub struct ScanOutcome {
@@ -35,10 +36,24 @@ pub fn check(root: &Path, adapter: &dyn LanguageAdapter) -> Result<ScanOutcome> 
     let rules = rules::all_rules();
     let language = adapter.language();
 
+    // First pass: which functions assert, across the whole suite rather than one
+    // file at a time. A shared base class in a helper module is the normal way
+    // to write assertion helpers, and resolving only within a file reports every
+    // test that uses one as asserting nothing.
+    let modules = discover::sibling_modules(&files);
+    let helpers = Helpers {
+        asserting: files
+            .par_iter()
+            .chain(modules.par_iter())
+            .filter_map(|path| asserting_helpers(path, adapter, &language))
+            .flatten()
+            .collect(),
+    };
+
     let results: Vec<std::result::Result<Report, (PathBuf, String)>> = files
         .par_iter()
         .map(|path| {
-            scan_file(path, adapter, &rules, &language)
+            scan_file(path, adapter, &rules, &language, &helpers)
                 .map_err(|e| (path.clone(), format!("{e:#}")))
         })
         .collect();
@@ -54,11 +69,24 @@ pub fn check(root: &Path, adapter: &dyn LanguageAdapter) -> Result<ScanOutcome> 
     Ok(outcome)
 }
 
+/// Functions in one file that assert, directly or through another local call.
+/// Failures are ignored: an unreadable helper module shouldn't fail the scan.
+fn asserting_helpers(
+    path: &Path,
+    adapter: &dyn LanguageAdapter,
+    language: &tree_sitter::Language,
+) -> Option<HashSet<String>> {
+    let src = std::fs::read_to_string(path).ok()?;
+    let tree = parse::parse(language, &src).ok()?;
+    Some(adapter.asserting_helpers(tree.root_node(), &src))
+}
+
 fn scan_file(
     path: &Path,
     adapter: &dyn LanguageAdapter,
     rules: &[Box<dyn Rule>],
     language: &tree_sitter::Language,
+    helpers: &Helpers,
 ) -> Result<Report> {
     let src =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
@@ -67,11 +95,6 @@ fn scan_file(
 
     let root = tree.root_node();
     let tests = adapter.test_functions(root, &src);
-
-    // Once per file, not once per test: this is linear in file size.
-    let file_ctx = FileCtx {
-        asserting_helpers: adapter.asserting_helpers(root, &src),
-    };
 
     let mut report = Report {
         findings: Vec::new(),
@@ -85,7 +108,7 @@ fn scan_file(
             src: &src,
             path,
             adapter,
-            file: &file_ctx,
+            helpers,
             test,
         };
         for rule in rules {
