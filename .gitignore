@@ -20,3 +20,6 @@ corpus-scan.log
 *.swp
 Thumbs.db
 .DS_Store
+
+# Local PR drafts.
+PR-*.md
