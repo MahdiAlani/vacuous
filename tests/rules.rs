@@ -189,7 +189,7 @@ fn no_assertions_stays_quiet_on_real_tests() {
     );
     // Pins test discovery. Helpers, nested functions, and `not_a_test_at_all`
     // are all excluded, leaving exactly the real tests.
-    assert_eq!(report.tests_scanned, 19);
+    assert_eq!(report.tests_scanned, 21);
 }
 
 /// Assertion helpers usually live in a shared base class, often in a module no

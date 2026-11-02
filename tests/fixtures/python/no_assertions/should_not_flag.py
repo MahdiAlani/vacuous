@@ -129,3 +129,14 @@ def test_decorated_nested_function():
 def not_a_test_at_all():
     """Shouldn't be collected in the first place."""
     pass
+
+
+def test_warns_is_an_assertion():
+    # pytest.warns fails if the warning never arrives, exactly like raises.
+    with pytest.warns(UserWarning):
+        warnings.warn("something", UserWarning)
+
+
+def test_deprecated_call_is_an_assertion():
+    with pytest.deprecated_call():
+        legacy_api()

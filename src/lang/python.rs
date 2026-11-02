@@ -46,6 +46,11 @@ const KNOWN_ASSERTION_FUNCTIONS: &[&str] = &[
     "expect",
 ];
 
+/// Context managers that fail when the expected thing doesn't happen.
+/// `pytest.warns(...)` is as much an assertion as `pytest.raises(...)`, and
+/// missing it reported most of pytest's own warning tests as asserting nothing.
+const CONTEXT_ASSERTIONS: &[&str] = &["raises", "warns", "deprecated_call"];
+
 const ASSERTION_CATCHING: &[&str] = &["Exception", "BaseException", "AssertionError"];
 
 impl LanguageAdapter for Python {
@@ -110,7 +115,7 @@ impl LanguageAdapter for Python {
                 // Catches unittest, numpy/pandas `assert_allclose`, hamcrest
                 // `assert_that`, and mock's `assert_called_*`.
                 name.starts_with("assert")
-                    || name == "raises"
+                    || CONTEXT_ASSERTIONS.contains(&name)
                     || name == "fail"
                     || KNOWN_ASSERTION_FUNCTIONS.contains(&name)
             }
