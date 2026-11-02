@@ -1,0 +1,11 @@
+1000 packages, 771 already scanned
+  100/1000  scanned=16 skipped=0
+  125/1000  scanned=41 skipped=0
+  150/1000  scanned=66 skipped=0
+  175/1000  scanned=91 skipped=0
+  200/1000  scanned=115 skipped=1
+  225/1000  scanned=140 skipped=1
+  250/1000  scanned=165 skipped=1
+  275/1000  scanned=188 skipped=3
+  300/1000  scanned=211 skipped=5
+done: 224 scanned, 5 skipped

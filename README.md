@@ -24,7 +24,7 @@ $ vacuous check tests/
 
 It's a static analysis pass over tree-sitter, so it doesn't run your tests and
 doesn't need your dependencies installed. Most repos take a fraction of a second
-— flask 244ms, celery 483ms — and sqlalchemy's 12,716 tests take 2.2s. No
+— flask scans in ~340ms — and sqlalchemy's 13,000 tests take about 3s. No
 network, no API keys.
 
 ## Install

@@ -24,3 +24,6 @@ Thumbs.db
 # Local PR drafts.
 PR-*.md
 commitmsg.tmp
+
+# Local post drafts.
+POST-*.md
